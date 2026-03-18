@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Walkathon Tracker + Chat</title>
+  <title>Walkathon Tracker</title>
   <style>
     :root{
       --bg:#0f1115;
@@ -13,7 +13,6 @@
       --green2:#00d26a;
       --line:#2a2f3a;
       --white:#fff;
-      --accent:#8b5cf6;
     }
 
     * { box-sizing: border-box; }
@@ -105,6 +104,7 @@
       color: white;
       font-weight: 700;
       background: #252a35;
+      cursor: pointer;
     }
 
     button.primary { background: #1f6feb; }
@@ -150,41 +150,6 @@
     .rose .s { left: 50%; bottom: 4px; transform: translateX(-50%); }
     .rose .e { right: 6px; top: 50%; transform: translateY(-50%); }
     .rose .w { left: 6px; top: 50%; transform: translateY(-50%); }
-
-    #chat {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 46vh;
-      overflow: auto;
-      padding-right: 4px;
-    }
-
-    .msg {
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 8px 10px;
-      line-height: 1.35;
-      word-break: break-word;
-    }
-
-    .msg .name {
-      font-weight: 700;
-      margin-right: 6px;
-    }
-
-    .msg .time {
-      color: var(--muted);
-      font-size: 11px;
-      margin-left: 6px;
-    }
-
-    .msg img.emote {
-      height: 24px;
-      vertical-align: middle;
-      margin: 0 2px;
-    }
 
     .muted { color: var(--muted); font-size: 13px; }
   </style>
@@ -242,9 +207,11 @@
     </div>
 
     <div class="card">
-      <div class="title">Twitch Chat + 7TV — sergiei2</div>
-      <div class="muted" id="chatStatus">connecting...</div>
-      <div id="chat" style="margin-top:10px"></div>
+      <div class="title">Twitch Chat — sergiei2</div>
+      <iframe
+        src="https://www.twitch.tv/embed/sergiei2/chat?parent=sergi165.github.io"
+        style="width:100%; height:420px; border:none; border-radius:12px; background:#0b0d12;">
+      </iframe>
     </div>
   </div>
 
@@ -254,7 +221,6 @@
       getDatabase, ref, set, update, onValue
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    // ========== FIREBASE ==========
     const firebaseConfig = {
       apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo",
       authDomain: "walkathon-a4233.firebaseapp.com",
@@ -269,11 +235,10 @@
     const db = getDatabase(app);
     const stateRef = ref(db, 'walkathon/state');
 
-    // ========== WALKATHON ==========
     const GOAL_METERS = 10000;
-    const MIN_ACCURACY = 35;      // игнорируем точки хуже этого
-    const MIN_STEP_METERS = 5;    // шум до 5м игнорируем
-    const MAX_STEP_METERS = 120;  // нереальные скачки игнорируем
+    const MIN_ACCURACY = 35;
+    const MIN_STEP_METERS = 5;
+    const MAX_STEP_METERS = 120;
 
     const doneEl = document.getElementById('done');
     const leftEl = document.getElementById('left');
@@ -409,7 +374,7 @@
       }
     });
 
-    // ========== COMPASS ==========
+    // COMPASS
     const needleEl = document.getElementById('needle');
     const headingDegEl = document.getElementById('headingDeg');
     const headingDirEl = document.getElementById('headingDir');
@@ -420,11 +385,28 @@
       return dirs[Math.round(deg / 45) % 8];
     }
 
+    let smoothHeading = 0;
+    let hasHeading = false;
+
+    function angleDelta(a, b) {
+      return (b - a + 540) % 360 - 180;
+    }
+
     function setHeading(deg) {
-      const n = ((deg % 360) + 360) % 360;
-      needleEl.style.transform = `translate(-50%, -80%) rotate(${n}deg)`;
-      headingDegEl.textContent = Math.round(n) + '°';
-      const dir = degToDir(n);
+      const target = ((deg % 360) + 360) % 360;
+
+      if (!hasHeading) {
+        smoothHeading = target;
+        hasHeading = true;
+      } else {
+        const d = angleDelta(smoothHeading, target);
+        if (Math.abs(d) < 1) return;
+        smoothHeading = (smoothHeading + d * 0.15 + 360) % 360;
+      }
+
+      needleEl.style.transform = `translate(-50%, -80%) rotate(${smoothHeading}deg)`;
+      headingDegEl.textContent = Math.round(smoothHeading) + '°';
+      const dir = degToDir(smoothHeading);
       headingDirEl.textContent = dir;
       headingTextEl.textContent = dir;
     }
@@ -444,169 +426,12 @@
         window.addEventListener('deviceorientation', (e) => {
           if (typeof e.alpha === 'number') setHeading(e.alpha);
         }, true);
-      } catch {}
+      } catch (e) {
+        console.log('Compass init error', e);
+      }
     }
+
     initCompass();
-
-    // ========== TWITCH CHAT + 7TV ==========
-    const chatEl = document.getElementById('chat');
-    const chatStatusEl = document.getElementById('chatStatus');
-
-    const CHANNEL_LOGIN = 'sergiei2';
-
-    // Публичный client-id Twitch (для тестов часто работает, но не гарантируется вечно)
-    const TWITCH_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
-
-    let broadcasterId = null;
-    let eventSocket = null;
-    let sevenTvMap = new Map();
-
-    function escapeHtml(s) {
-      return s.replace(/[&<>"']/g, m => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
-      }[m]));
-    }
-
-    function renderTextWith7TV(text) {
-      const parts = text.split(/(\s+)/);
-      return parts.map(p => {
-        const em = sevenTvMap.get(p);
-        if (em) {
-          return `<img class="emote" src="${em}" alt="${p}" title="${p}">`;
-        }
-        return escapeHtml(p);
-      }).join('');
-    }
-
-    function addMessage({ username, color, text }) {
-      const div = document.createElement('div');
-      div.className = 'msg';
-      const t = new Date();
-      const time = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      div.innerHTML = `
-        <span class="name" style="color:${color || '#8ab4ff'}">${escapeHtml(username || 'user')}</span>
-        <span class="time">${time}</span>
-        <div class="body" style="margin-top:4px">${renderTextWith7TV(text || '')}</div>
-      `;
-
-      chatEl.appendChild(div);
-      while (chatEl.children.length > 80) chatEl.removeChild(chatEl.firstChild);
-      chatEl.scrollTop = chatEl.scrollHeight;
-    }
-
-    async function load7TVForChannel() {
-      try {
-        // 7TV v3 users by twitch login
-        const userRes = await fetch(`https://7tv.io/v3/users/twitch/${CHANNEL_LOGIN}`);
-        if (!userRes.ok) throw new Error('7TV user not found');
-        const user = await userRes.json();
-
-        const emoteSet = user?.emote_set?.emotes || [];
-        sevenTvMap.clear();
-
-        for (const em of emoteSet) {
-          const name = em.name;
-          const files = em.data?.host?.files || [];
-          const hostUrl = em.data?.host?.url;
-          const preferred = files.find(f => f.name.includes('2x')) || files[0];
-          if (name && hostUrl && preferred?.name) {
-            sevenTvMap.set(name, `https:${hostUrl}/${preferred.name}`);
-          }
-        }
-
-        chatStatusEl.textContent = `chat connected · 7TV loaded: ${sevenTvMap.size}`;
-      } catch (e) {
-        chatStatusEl.textContent = 'chat connected · 7TV load failed';
-      }
-    }
-
-    async function getBroadcasterId(login) {
-      const res = await fetch(`https://api.twitch.tv/helix/users?login=${encodeURIComponent(login)}`, {
-        headers: {
-          'Client-ID': TWITCH_CLIENT_ID
-        }
-      });
-      const data = await res.json();
-      return data?.data?.[0]?.id || null;
-    }
-
-    function connectEventSub() {
-      eventSocket = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
-
-      eventSocket.onopen = () => {
-        chatStatusEl.textContent = 'eventsub connected...';
-      };
-
-      eventSocket.onmessage = async (event) => {
-        const msg = JSON.parse(event.data);
-        const type = msg?.metadata?.message_type;
-
-        if (type === 'session_welcome') {
-          const sessionId = msg.payload.session.id;
-
-          await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
-            method: 'POST',
-            headers: {
-              'Client-ID': TWITCH_CLIENT_ID,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              type: 'channel.chat.message',
-              version: '1',
-              condition: {
-                broadcaster_user_id: broadcasterId,
-                user_id: broadcasterId
-              },
-              transport: {
-                method: 'websocket',
-                session_id: sessionId
-              }
-            })
-          }).catch(() => {});
-        }
-
-        if (type === 'notification') {
-          const ev = msg.payload.event;
-          if (ev && ev.message) {
-            addMessage({
-              username: ev.chatter_user_name || ev.chatter_user_login,
-              color: '#8ab4ff',
-              text: ev.message.text || ''
-            });
-          }
-        }
-
-        if (type === 'session_keepalive') {
-          // noop
-        }
-      };
-
-      eventSocket.onclose = () => {
-        chatStatusEl.textContent = 'chat disconnected, reconnecting...';
-        setTimeout(connectEventSub, 4000);
-      };
-
-      eventSocket.onerror = () => {
-        chatStatusEl.textContent = 'chat error';
-      };
-    }
-
-    async function initChat() {
-      try {
-        broadcasterId = await getBroadcasterId(CHANNEL_LOGIN);
-        if (!broadcasterId) {
-          chatStatusEl.textContent = 'cannot resolve twitch user';
-          return;
-        }
-        await load7TVForChannel();
-        connectEventSub();
-      } catch (e) {
-        chatStatusEl.textContent = 'chat init failed';
-      }
-    }
-
-    initChat();
     updateUI({ status: 'idle' });
   </script>
 </body>
