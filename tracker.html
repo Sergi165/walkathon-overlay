@@ -4,6 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Walkathon Tracker</title>
+
+  <script>
+    const CHANNEL_NAME = "sergiei2";
+    const SEVENTV_EMOTE_SET_ID = "01KGFF8BV0WE3FCDD66AXJVH9H";
+    const MESSAGE_LIFETIME = 15;
+    const MAX_MESSAGES = 40;
+  </script>
+
   <style>
     :root{
       --bg:#0f1115;
@@ -16,6 +24,7 @@
     }
 
     * { box-sizing: border-box; }
+
     html, body {
       margin: 0;
       background: var(--bg);
@@ -151,7 +160,62 @@
     .rose .e { right: 6px; top: 50%; transform: translateY(-50%); }
     .rose .w { left: 6px; top: 50%; transform: translateY(-50%); }
 
-    .muted { color: var(--muted); font-size: 13px; }
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chat-status {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    #chat {
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 6px;
+      max-height: 420px;
+      overflow: hidden;
+    }
+
+    .message {
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.05);
+      color: #fff;
+      font-size: 16px;
+      line-height: 1.3;
+      opacity: 0;
+      animation: fadeIn 0.2s forwards;
+      max-width: 100%;
+      word-wrap: break-word;
+    }
+
+    .message.fade-out {
+      animation: fadeOut 0.4s forwards;
+    }
+
+    .username {
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .emote {
+      height: 28px;
+      vertical-align: middle;
+      margin: 0 2px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeOut {
+      from { opacity: 1; transform: translateY(0); }
+      to   { opacity: 0; transform: translateY(-6px); }
+    }
   </style>
 </head>
 <body>
@@ -207,11 +271,9 @@
     </div>
 
     <div class="card">
-      <div class="title">Twitch Chat — sergiei2</div>
-      <iframe
-        src="https://www.twitch.tv/popout/sergiei2/chat?popout="
-        style="width:100%; height:420px; border:none; border-radius:12px; background:#0b0d12;">
-      </iframe>
+      <div class="title">Twitch + 7TV Chat — sergiei2</div>
+      <div class="chat-status" id="chatStatus">starting...</div>
+      <div id="chat"></div>
     </div>
   </div>
 
@@ -430,8 +492,181 @@
       }
     }
 
+    // CHAT
+    const chatEl = document.getElementById("chat");
+    const chatStatusEl = document.getElementById("chatStatus");
+    const emoteMap = new Map();
+
+    function setChatStatus(text) {
+      chatStatusEl.textContent = text;
+    }
+
+    async function loadSevenTVEmotes() {
+      if (!SEVENTV_EMOTE_SET_ID) {
+        setChatStatus("7TV set id not set");
+        return;
+      }
+
+      try {
+        setChatStatus("loading 7TV...");
+        const url = `https://7tv.io/v3/emote-sets/${SEVENTV_EMOTE_SET_ID}`;
+        const res = await fetch(url);
+
+        if (!res.ok) {
+          console.error("7TV error", res.status, await res.text());
+          setChatStatus("7TV load failed");
+          return;
+        }
+
+        const data = await res.json();
+        if (!data.emotes) {
+          console.error("7TV bad response:", data);
+          setChatStatus("7TV invalid response");
+          return;
+        }
+
+        data.emotes.forEach(e => {
+          const imgUrl = `https://cdn.7tv.app/emote/${e.id}/2x.webp`;
+          emoteMap.set(e.name, imgUrl);
+        });
+
+        setChatStatus(`7TV loaded: ${emoteMap.size}`);
+      } catch (err) {
+        console.error("7TV request error", err);
+        setChatStatus("7TV request error");
+      }
+    }
+
+    function addMessage(username, text, color) {
+      const msg = document.createElement("div");
+      msg.className = "message";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "username";
+      nameSpan.textContent = username + ":";
+      if (color) nameSpan.style.color = color;
+      msg.appendChild(nameSpan);
+
+      const textSpan = document.createElement("span");
+      const parts = text.split(/\s+/);
+
+      for (let i = 0; i < parts.length; i++) {
+        const token = parts[i];
+
+        if (emoteMap.has(token)) {
+          const img = document.createElement("img");
+          img.className = "emote";
+          img.src = emoteMap.get(token);
+          img.alt = token;
+          img.title = token;
+          textSpan.appendChild(img);
+        } else {
+          textSpan.appendChild(document.createTextNode(token));
+        }
+
+        if (i !== parts.length - 1) {
+          textSpan.appendChild(document.createTextNode(" "));
+        }
+      }
+
+      msg.appendChild(textSpan);
+      chatEl.prepend(msg);
+
+      while (chatEl.children.length > MAX_MESSAGES) {
+        chatEl.lastChild.remove();
+      }
+
+      setTimeout(() => {
+        msg.classList.add("fade-out");
+        setTimeout(() => msg.remove(), 400);
+      }, MESSAGE_LIFETIME * 1000);
+    }
+
+    let ws;
+
+    function connectTwitch() {
+      if (!CHANNEL_NAME) {
+        setChatStatus("channel not set");
+        return;
+      }
+
+      const nick = "justinfan" + Math.floor(Math.random() * 80000 + 1000);
+      ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+
+      ws.addEventListener("open", () => {
+        setChatStatus("connected");
+
+        ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership\r\n");
+        ws.send("NICK " + nick + "\r\n");
+        ws.send("JOIN #" + CHANNEL_NAME.toLowerCase() + "\r\n");
+      });
+
+      ws.addEventListener("message", (event) => {
+        const lines = event.data.split("\r\n");
+        for (const line of lines) {
+          if (!line) continue;
+
+          if (line.startsWith("PING")) {
+            ws.send("PONG :tmi.twitch.tv\r\n");
+            continue;
+          }
+
+          handleIrcLine(line);
+        }
+      });
+
+      ws.addEventListener("close", () => {
+        setChatStatus("reconnecting in 5s...");
+        setTimeout(connectTwitch, 5000);
+      });
+
+      ws.addEventListener("error", (e) => {
+        console.error("WS error", e);
+        setChatStatus("socket error");
+        ws.close();
+      });
+    }
+
+    function handleIrcLine(line) {
+      let tags = {};
+      let rest = line;
+
+      if (rest.startsWith("@")) {
+        const spaceIdx = rest.indexOf(" ");
+        const tagStr = rest.slice(1, spaceIdx);
+        rest = rest.slice(spaceIdx + 1);
+
+        tagStr.split(";").forEach(part => {
+          const [k, v] = part.split("=");
+          tags[k] = v || "";
+        });
+      }
+
+      if (!rest.startsWith(":")) return;
+
+      const prefixEnd = rest.indexOf(" ");
+      const prefix = rest.slice(1, prefixEnd);
+      rest = rest.slice(prefixEnd + 1);
+
+      const spaceIdx = rest.indexOf(" ");
+      const command = rest.slice(0, spaceIdx);
+      const params = rest.slice(spaceIdx + 1);
+
+      if (command === "PRIVMSG") {
+        const msgIdx = params.indexOf(" :");
+        if (msgIdx === -1) return;
+
+        const text = params.slice(msgIdx + 2).slice(0, 350);
+        const username = (tags["display-name"] || prefix.split("!")[0]) || "user";
+        const color = tags["color"] || "#ffffff";
+
+        addMessage(username, text, color);
+      }
+    }
+
     initCompass();
     updateUI({ status: 'idle' });
+    loadSevenTVEmotes().then(connectTwitch);
   </script>
 </body>
 </html>
