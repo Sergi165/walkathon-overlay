@@ -15,6 +15,66 @@
       color: #fff;
     }
 
+    .clockbox {
+      position: absolute;
+      left: 18px;
+      bottom: 190px;
+      width: 320px;
+      padding: 14px 16px;
+      background: rgba(10,10,16,.62);
+      border-left: 4px solid #7c3aed;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.25);
+      backdrop-filter: blur(4px);
+    }
+
+    .city {
+      font-size: 12px;
+      letter-spacing: .18em;
+      color: #c6c8d0;
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .clockrow {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .clock {
+      font-size: 64px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 1px;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,.12);
+      margin: 10px 0 10px;
+    }
+
+    .weatherrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .temp {
+      font-size: 18px;
+      color: #fff;
+    }
+
+    .date {
+      font-size: 15px;
+      color: #c5c7d0;
+      font-weight: 600;
+    }
+
     .hud {
       position: absolute;
       left: 18px;
@@ -86,6 +146,21 @@
   </style>
 </head>
 <body>
+  <div class="clockbox">
+    <div class="city" id="city">LOADING LOCATION...</div>
+
+    <div class="clockrow">
+      <div class="clock" id="clock">00:00:00</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="weatherrow">
+      <div class="temp" id="temp">--°C</div>
+      <div class="date" id="date">---</div>
+    </div>
+  </div>
+
   <div class="hud">
     <div class="topline">
       <div class="done" id="done">0m</div>
@@ -110,7 +185,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    // ВСТАВЬ СВОЙ FIREBASE CONFIG СЮДА
     const firebaseConfig = {
       apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo",
       authDomain: "walkathon-a4233.firebaseapp.com",
@@ -133,9 +207,90 @@
     const pctEl = document.getElementById('pct');
     const statusEl = document.getElementById('status');
 
+    const clockEl = document.getElementById('clock');
+    const tempEl = document.getElementById('temp');
+    const dateEl = document.getElementById('date');
+    const cityEl = document.getElementById('city');
+
     function fmtMeters(m) {
       if (m >= 1000) return (m / 1000).toFixed(2) + 'km';
       return Math.round(m) + 'm';
+    }
+
+    function updateClock() {
+      const now = new Date();
+
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+
+      clockEl.textContent = `${h}:${m}:${s}`;
+
+      const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      dateEl.textContent =
+        weekdays[now.getDay()] + ', ' +
+        now.getDate() + ' ' +
+        months[now.getMonth()];
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    async function updateWeatherAndCity(lat, lon) {
+      try {
+        const weatherRes = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m`
+        );
+        const weatherData = await weatherRes.json();
+
+        if (weatherData && weatherData.current && typeof weatherData.current.temperature_2m !== 'undefined') {
+          tempEl.textContent = Math.round(weatherData.current.temperature_2m) + '°C';
+        }
+
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`
+        );
+        const geoData = await geoRes.json();
+
+        if (geoData && geoData.address) {
+          const city =
+            geoData.address.city ||
+            geoData.address.town ||
+            geoData.address.village ||
+            geoData.address.hamlet ||
+            geoData.address.county ||
+            'UNKNOWN';
+
+          const country =
+            geoData.address.country_code
+              ? geoData.address.country_code.toUpperCase()
+              : '';
+
+          cityEl.textContent = `${city} · ${country}`;
+        }
+      } catch (e) {
+        cityEl.textContent = 'LOCATION UNAVAILABLE';
+      }
+    }
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          updateWeatherAndCity(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => {
+          cityEl.textContent = 'LOCATION BLOCKED';
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000
+        }
+      );
+    } else {
+      cityEl.textContent = 'NO GEOLOCATION';
     }
 
     const stateRef = ref(db, 'walkathon/state');
