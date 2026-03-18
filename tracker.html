@@ -134,8 +134,8 @@
       width: 4px;
       height: 34px;
       background: linear-gradient(180deg, #ff4d4d, #fff);
-      transform-origin: center 28px;
-      translate: -50% -80%;
+      transform-origin: center 26px;
+      transform: translate(-50%, -100%) rotate(0deg);
       border-radius: 4px;
     }
 
@@ -209,7 +209,7 @@
     <div class="card">
       <div class="title">Twitch Chat — sergiei2</div>
       <iframe
-        src="https://www.twitch.tv/embed/sergiei2/chat?parent=sergi165.github.io"
+        src="https://www.twitch.tv/popout/sergiei2/chat?popout="
         style="width:100%; height:420px; border:none; border-radius:12px; background:#0b0d12;">
       </iframe>
     </div>
@@ -374,7 +374,6 @@
       }
     });
 
-    // COMPASS
     const needleEl = document.getElementById('needle');
     const headingDegEl = document.getElementById('headingDeg');
     const headingDirEl = document.getElementById('headingDir');
@@ -404,7 +403,7 @@
         smoothHeading = (smoothHeading + d * 0.15 + 360) % 360;
       }
 
-      needleEl.style.transform = `translate(-50%, -80%) rotate(${smoothHeading}deg)`;
+      needleEl.style.transform = `translate(-50%, -100%) rotate(${smoothHeading}deg)`;
       headingDegEl.textContent = Math.round(smoothHeading) + '°';
       const dir = degToDir(smoothHeading);
       headingDirEl.textContent = dir;
