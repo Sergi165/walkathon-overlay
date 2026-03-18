@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Walkathon Overlay</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
+
+    .hud {
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
+      width: 360px;
+      padding: 14px;
+      background: rgba(0,0,0,.42);
+      border-radius: 14px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.25);
+    }
+
+    .topline {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .done {
+      font-size: 42px;
+      font-weight: 700;
+      color: #39ff14;
+      line-height: 1;
+      text-shadow: 0 0 8px rgba(57,255,20,.25);
+    }
+
+    .goal {
+      font-size: 14px;
+      opacity: .85;
+    }
+
+    .left {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #7CFF6B;
+      font-weight: 700;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 14px;
+      opacity: .92;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .bar {
+      margin-top: 12px;
+      height: 18px;
+      background: rgba(255,255,255,.16);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #39ff14, #00d26a);
+      transition: width .4s ease;
+    }
+
+    .pct {
+      margin-top: 8px;
+      font-size: 13px;
+      opacity: .9;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="topline">
+      <div class="done" id="done">0m</div>
+      <div class="goal">GOAL: 10km</div>
+    </div>
+
+    <div class="left" id="left">LEFT: 10000m</div>
+
+    <div class="sub">
+      <span id="walked">WALKED: 0m</span>
+      <span id="status">GPS: idle</span>
+    </div>
+
+    <div class="bar">
+      <div class="fill" id="fill"></div>
+    </div>
+
+    <div class="pct" id="pct">0.0%</div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // ВСТАВЬ СВОЙ FIREBASE CONFIG СЮДА
+    const firebaseConfig = {
+      apiKey: "PASTE_HERE",
+      authDomain: "PASTE_HERE",
+      databaseURL: "PASTE_HERE",
+      projectId: "PASTE_HERE",
+      storageBucket: "PASTE_HERE",
+      messagingSenderId: "PASTE_HERE",
+      appId: "PASTE_HERE"
+    };
+
+    const GOAL_METERS = 10000;
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const doneEl = document.getElementById('done');
+    const leftEl = document.getElementById('left');
+    const walkedEl = document.getElementById('walked');
+    const fillEl = document.getElementById('fill');
+    const pctEl = document.getElementById('pct');
+    const statusEl = document.getElementById('status');
+
+    function fmtMeters(m) {
+      if (m >= 1000) return (m / 1000).toFixed(2) + 'km';
+      return Math.round(m) + 'm';
+    }
+
+    const stateRef = ref(db, 'walkathon/state');
+
+    onValue(stateRef, (snap) => {
+      const s = snap.val() || {};
+      const distance = Number(s.distanceMeters || 0);
+      const left = Math.max(GOAL_METERS - distance, 0);
+      const percent = Math.min((distance / GOAL_METERS) * 100, 100);
+
+      doneEl.textContent = fmtMeters(distance);
+      leftEl.textContent = 'LEFT: ' + fmtMeters(left);
+      walkedEl.textContent = 'WALKED: ' + fmtMeters(distance);
+      fillEl.style.width = percent + '%';
+      pctEl.textContent = percent.toFixed(1) + '%';
+      statusEl.textContent = 'GPS: ' + (s.status || 'idle');
+    });
+  </script>
+</body>
+</html>
