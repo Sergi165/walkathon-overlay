@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Walkathon Tracker Debug</title>
+  <title>Walkathon Tracker</title>
 
   <script>
     const CHANNEL_NAME = "sergiei2";
@@ -175,7 +175,7 @@
       display: flex;
       flex-direction: column-reverse;
       gap: 6px;
-      max-height: 320px;
+      max-height: 420px;
       overflow: hidden;
     }
 
@@ -205,20 +205,6 @@
       height: 28px;
       vertical-align: middle;
       margin: 0 2px;
-    }
-
-    #debug {
-      font-family: monospace;
-      font-size: 12px;
-      line-height: 1.35;
-      color: #9cdcfe;
-      background: #0b0d12;
-      border: 1px solid #222935;
-      border-radius: 10px;
-      padding: 8px;
-      max-height: 220px;
-      overflow: auto;
-      white-space: pre-wrap;
     }
 
     @keyframes fadeIn {
@@ -289,11 +275,6 @@
       <div class="chat-status" id="chatStatus">starting...</div>
       <div id="chat"></div>
     </div>
-
-    <div class="card">
-      <div class="title">Debug Log</div>
-      <div id="debug"></div>
-    </div>
   </div>
 
   <script type="module">
@@ -311,13 +292,6 @@
       messagingSenderId: "314823180241",
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
-
-    const debugEl = document.getElementById("debug");
-    function log(...args) {
-      const line = args.map(x => typeof x === "string" ? x : JSON.stringify(x)).join(" ");
-      console.log(...args);
-      debugEl.textContent = `[${new Date().toLocaleTimeString()}] ${line}\n` + debugEl.textContent;
-    }
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -390,12 +364,9 @@
       if (watchId != null) return;
 
       statusEl.textContent = 'starting';
-      log("GPS start requested");
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
         const { latitude, longitude, accuracy, speed } = pos.coords;
-
-        log("GPS point", { latitude, longitude, accuracy, speed });
 
         if (accuracy && accuracy > MIN_ACCURACY) {
           updateUI({ status: 'weak gps', acc: accuracy, speed });
@@ -407,7 +378,6 @@
 
         if (lastPoint) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
-          log("GPS step", step);
 
           if (step >= MIN_STEP_METERS && step <= MAX_STEP_METERS) {
             distanceMeters += step;
@@ -419,7 +389,6 @@
         await pushState('tracking', { accuracy, speed: speed ?? 0 });
       }, async (err) => {
         statusEl.textContent = 'gps error';
-        log("GPS error", err.message || err);
         await pushState('gps error', { error: err.message || 'unknown' });
       }, {
         enableHighAccuracy: true,
@@ -433,7 +402,6 @@
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
-      log("GPS stopped");
       await pushState('stopped');
       statusEl.textContent = 'stopped';
     }
@@ -442,7 +410,6 @@
       if (!confirm('Сбросить дистанцию?')) return;
       distanceMeters = 0;
       lastPoint = null;
-      log("GPS reset");
       updateUI({ status: 'reset', acc: null, speed: null });
       await set(stateRef, {
         distanceMeters: 0,
@@ -510,7 +477,6 @@
         if (typeof DeviceOrientationEvent !== 'undefined' &&
             typeof DeviceOrientationEvent.requestPermission === 'function') {
           const res = await DeviceOrientationEvent.requestPermission();
-          log("Compass permission", res);
           if (res !== 'granted') return;
         }
 
@@ -521,21 +487,17 @@
         window.addEventListener('deviceorientation', (e) => {
           if (typeof e.alpha === 'number') setHeading(e.alpha);
         }, true);
-
-        log("Compass listeners attached");
       } catch (e) {
-        log("Compass init error", e.message || e);
+        console.log('Compass init error', e);
       }
     }
 
-    // CHAT
     const chatEl = document.getElementById("chat");
     const chatStatusEl = document.getElementById("chatStatus");
     const emoteMap = new Map();
 
     function setChatStatus(text) {
       chatStatusEl.textContent = text;
-      log("CHAT:", text);
     }
 
     async function loadSevenTVEmotes() {
@@ -547,23 +509,16 @@
       try {
         setChatStatus("loading 7TV...");
         const url = `https://7tv.io/v3/emote-sets/${SEVENTV_EMOTE_SET_ID}`;
-        log("7TV fetch", url);
-
         const res = await fetch(url);
-        log("7TV response status", res.status);
 
         if (!res.ok) {
-          const txt = await res.text();
-          log("7TV error body", txt);
           setChatStatus("7TV load failed");
           return;
         }
 
         const data = await res.json();
-        log("7TV response ok");
 
         if (!data.emotes) {
-          log("7TV invalid response", data);
           setChatStatus("7TV invalid response");
           return;
         }
@@ -575,14 +530,11 @@
 
         setChatStatus(`7TV loaded: ${emoteMap.size}`);
       } catch (err) {
-        log("7TV request error", err.message || err);
         setChatStatus("7TV request error");
       }
     }
 
     function addMessage(username, text, color) {
-      log("MSG", username, text);
-
       const msg = document.createElement("div");
       msg.className = "message";
 
@@ -636,18 +588,14 @@
       }
 
       const nick = "justinfan" + Math.floor(Math.random() * 80000 + 1000);
-      log("Connecting Twitch IRC as", nick);
-
       ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
 
       ws.addEventListener("open", () => {
-        log("WS open");
         setChatStatus("connected");
 
         ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership\r\n");
         ws.send("NICK " + nick + "\r\n");
         ws.send("JOIN #" + CHANNEL_NAME.toLowerCase() + "\r\n");
-        log("JOIN sent", CHANNEL_NAME.toLowerCase());
       });
 
       ws.addEventListener("message", (event) => {
@@ -655,11 +603,8 @@
         for (const line of lines) {
           if (!line) continue;
 
-          log("IRC", line);
-
           if (line.startsWith("PING")) {
             ws.send("PONG :tmi.twitch.tv\r\n");
-            log("PONG sent");
             continue;
           }
 
@@ -668,13 +613,11 @@
       });
 
       ws.addEventListener("close", () => {
-        log("WS closed");
         setChatStatus("reconnecting in 5s...");
         setTimeout(connectTwitch, 5000);
       });
 
-      ws.addEventListener("error", (e) => {
-        log("WS error", e.type || "unknown");
+      ws.addEventListener("error", () => {
         setChatStatus("socket error");
         ws.close();
       });
