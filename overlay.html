@@ -195,8 +195,6 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
-    const GOAL_METERS = 25000;
-
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
@@ -211,6 +209,8 @@
     const tempEl = document.getElementById('temp');
     const dateEl = document.getElementById('date');
     const cityEl = document.getElementById('city');
+
+    let lastWeatherKey = '';
 
     function fmtMeters(m) {
       if (m >= 1000) return (m / 1000).toFixed(2) + 'km';
@@ -240,6 +240,10 @@
 
     async function updateWeatherAndCity(lat, lon) {
       try {
+        const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+        if (roundedKey === lastWeatherKey) return;
+        lastWeatherKey = roundedKey;
+
         const weatherRes = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m`
         );
@@ -269,28 +273,12 @@
               : '';
 
           cityEl.textContent = `${city} · ${country}`;
+        } else {
+          cityEl.textContent = 'LOCATION UNKNOWN';
         }
       } catch (e) {
         cityEl.textContent = 'LOCATION UNAVAILABLE';
       }
-    }
-
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          updateWeatherAndCity(pos.coords.latitude, pos.coords.longitude);
-        },
-        () => {
-          cityEl.textContent = 'LOCATION BLOCKED';
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000
-        }
-      );
-    } else {
-      cityEl.textContent = 'NO GEOLOCATION';
     }
 
     const stateRef = ref(db, 'walkathon/state');
@@ -298,8 +286,9 @@
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       const distance = Number(s.distanceMeters || 0);
-      const left = Math.max(GOAL_METERS - distance, 0);
-      const percent = Math.min((distance / GOAL_METERS) * 100, 100);
+      const goal = Number(s.goalMeters || 10000);
+      const left = Math.max(goal - distance, 0);
+      const percent = Math.min((distance / goal) * 100, 100);
 
       doneEl.textContent = fmtMeters(distance);
       leftEl.textContent = 'LEFT: ' + fmtMeters(left);
@@ -307,6 +296,15 @@
       fillEl.style.width = percent + '%';
       pctEl.textContent = percent.toFixed(1) + '%';
       statusEl.textContent = 'GPS: ' + (s.status || 'idle');
+
+      const goalEl = document.querySelector('.goal');
+      goalEl.textContent = 'GOAL: ' + fmtMeters(goal);
+
+      if (typeof s.latitude === 'number' && typeof s.longitude === 'number') {
+        updateWeatherAndCity(s.latitude, s.longitude);
+      } else {
+        cityEl.textContent = 'WAITING FOR GPS...';
+      }
     });
   </script>
 </body>
