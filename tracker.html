@@ -7,7 +7,6 @@
 
   <script>
     const CHANNEL_NAME = "sergiei2";
-    const SEVENTV_EMOTE_SET_ID = "01KGFF8BV0WE3FCDD66AXJVH9H";
     const MESSAGE_LIFETIME = 15;
     const MAX_MESSAGES = 40;
   </script>
@@ -201,12 +200,6 @@
       margin-right: 6px;
     }
 
-    .emote {
-      height: 28px;
-      vertical-align: middle;
-      margin: 0 2px;
-    }
-
     .stream-preview {
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -288,7 +281,7 @@
     </div>
 
     <div class="card">
-      <div class="title">Twitch + 7TV Chat — sergiei2</div>
+      <div class="title">Twitch Chat — sergiei2</div>
       <div class="chat-status" id="chatStatus">starting...</div>
       <div id="chat"></div>
     </div>
@@ -387,7 +380,7 @@
 
         if (accuracy && accuracy > MIN_ACCURACY) {
           updateUI({ status: 'weak gps', acc: accuracy, speed });
-          await pushState('weak gps', { accuracy });
+          await pushState('weak gps', { accuracy, latitude, longitude, speed: speed ?? 0 });
           return;
         }
 
@@ -403,7 +396,12 @@
 
         lastPoint = point;
         updateUI({ status: 'tracking', acc: accuracy, speed });
-        await pushState('tracking', { accuracy, speed: speed ?? 0 });
+        await pushState('tracking', {
+          accuracy,
+          speed: speed ?? 0,
+          latitude,
+          longitude
+        });
       }, async (err) => {
         statusEl.textContent = 'gps error';
         await pushState('gps error', { error: err.message || 'unknown' });
@@ -511,44 +509,9 @@
 
     const chatEl = document.getElementById("chat");
     const chatStatusEl = document.getElementById("chatStatus");
-    const emoteMap = new Map();
 
     function setChatStatus(text) {
       chatStatusEl.textContent = text;
-    }
-
-    async function loadSevenTVEmotes() {
-      if (!SEVENTV_EMOTE_SET_ID) {
-        setChatStatus("7TV set id not set");
-        return;
-      }
-
-      try {
-        setChatStatus("loading 7TV...");
-        const url = `https://7tv.io/v3/emote-sets/${SEVENTV_EMOTE_SET_ID}`;
-        const res = await fetch(url);
-
-        if (!res.ok) {
-          setChatStatus("7TV load failed");
-          return;
-        }
-
-        const data = await res.json();
-
-        if (!data.emotes) {
-          setChatStatus("7TV invalid response");
-          return;
-        }
-
-        data.emotes.forEach(e => {
-          const imgUrl = `https://cdn.7tv.app/emote/${e.id}/2x.webp`;
-          emoteMap.set(e.name, imgUrl);
-        });
-
-        setChatStatus(`7TV loaded: ${emoteMap.size}`);
-      } catch (err) {
-        setChatStatus("7TV request error");
-      }
     }
 
     function addMessage(username, text, color) {
@@ -562,28 +525,9 @@
       msg.appendChild(nameSpan);
 
       const textSpan = document.createElement("span");
-      const parts = text.split(/\s+/);
-
-      for (let i = 0; i < parts.length; i++) {
-        const token = parts[i];
-
-        if (emoteMap.has(token)) {
-          const img = document.createElement("img");
-          img.className = "emote";
-          img.src = emoteMap.get(token);
-          img.alt = token;
-          img.title = token;
-          textSpan.appendChild(img);
-        } else {
-          textSpan.appendChild(document.createTextNode(token));
-        }
-
-        if (i !== parts.length - 1) {
-          textSpan.appendChild(document.createTextNode(" "));
-        }
-      }
-
+      textSpan.textContent = text;
       msg.appendChild(textSpan);
+
       chatEl.prepend(msg);
 
       while (chatEl.children.length > MAX_MESSAGES) {
@@ -679,7 +623,7 @@
 
     initCompass();
     updateUI({ status: 'idle' });
-    loadSevenTVEmotes().then(connectTwitch);
+    connectTwitch();
   </script>
 </body>
 </html>
