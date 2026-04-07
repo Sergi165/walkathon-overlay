@@ -44,6 +44,12 @@
       padding: 12px;
     }
 
+    .sticky-preview {
+      position: sticky;
+      top: 12px;
+      z-index: 50;
+    }
+
     .title {
       font-size: 13px;
       color: var(--muted);
@@ -221,7 +227,7 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
+    <div class="card sticky-preview">
       <div class="title">Stream Preview — sergiei2</div>
       <iframe
         class="stream-preview"
@@ -307,7 +313,7 @@
     const db = getDatabase(app);
     const stateRef = ref(db, 'walkathon/state');
 
-    const GOAL_METERS = 10000;
+    const GOAL_METERS = 25000;
     const MIN_ACCURACY = 35;
     const MIN_STEP_METERS = 5;
     const MAX_STEP_METERS = 120;
