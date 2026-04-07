@@ -164,7 +164,7 @@
   <div class="hud">
     <div class="topline">
       <div class="done" id="done">0m</div>
-      <div class="goal">GOAL: 10km</div>
+      <div class="goal" id="goal">GOAL: 10km</div>
     </div>
 
     <div class="left" id="left">LEFT: 10000m</div>
@@ -204,6 +204,7 @@
     const fillEl = document.getElementById('fill');
     const pctEl = document.getElementById('pct');
     const statusEl = document.getElementById('status');
+    const goalEl = document.getElementById('goal');
 
     const clockEl = document.getElementById('clock');
     const tempEl = document.getElementById('temp');
@@ -211,6 +212,7 @@
     const cityEl = document.getElementById('city');
 
     let lastWeatherKey = '';
+    let lastWeatherFetchAt = 0;
 
     function fmtMeters(m) {
       if (m >= 1000) return (m / 1000).toFixed(2) + 'km';
@@ -241,8 +243,14 @@
     async function updateWeatherAndCity(lat, lon) {
       try {
         const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-        if (roundedKey === lastWeatherKey) return;
+        const now = Date.now();
+
+        if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) {
+          return;
+        }
+
         lastWeatherKey = roundedKey;
+        lastWeatherFetchAt = now;
 
         const weatherRes = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m`
@@ -254,7 +262,12 @@
         }
 
         const geoRes = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`,
+          {
+            headers: {
+              "Accept": "application/json"
+            }
+          }
         );
         const geoData = await geoRes.json();
 
@@ -288,7 +301,7 @@
       const distance = Number(s.distanceMeters || 0);
       const goal = Number(s.goalMeters || 10000);
       const left = Math.max(goal - distance, 0);
-      const percent = Math.min((distance / goal) * 100, 100);
+      const percent = goal > 0 ? Math.min((distance / goal) * 100, 100) : 0;
 
       doneEl.textContent = fmtMeters(distance);
       leftEl.textContent = 'LEFT: ' + fmtMeters(left);
@@ -296,8 +309,6 @@
       fillEl.style.width = percent + '%';
       pctEl.textContent = percent.toFixed(1) + '%';
       statusEl.textContent = 'GPS: ' + (s.status || 'idle');
-
-      const goalEl = document.querySelector('.goal');
       goalEl.textContent = 'GOAL: ' + fmtMeters(goal);
 
       if (typeof s.latitude === 'number' && typeof s.longitude === 'number') {
