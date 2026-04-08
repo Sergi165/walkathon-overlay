@@ -25,7 +25,7 @@
       overflow: hidden;
     }
 
-    /* inside fixed 1920x1080 stage scaled to viewport */
+    /* 1920x1080 stage scaled into viewport */
     #stage {
       width: 1920px;
       height: 1080px;
@@ -36,22 +36,23 @@
     }
 
     .item {
-      position: absolute;
-      left: 0;
-      top: 0;
-      transform-origin: center center;   /* вращение вокруг центра */
+      position:absolute;
+      left:0;
+      top:0;
+      transform-origin: center center; /* вращение вокруг центра */
       cursor: move;
       user-select:none;
       -webkit-user-select:none;
       touch-action: none;
-      will-change: left, top, transform, opacity;
+      will-change: transform, opacity;
     }
 
     .item.selected {
-      outline: 2px solid rgba(124, 58, 237, .9);
+      outline: 2px solid rgba(124, 58, 237, .95);
       outline-offset: 2px;
     }
 
+    /* чтобы элемент было видно в control, даже если opacity=0 в базе */
     .item.lowOpacity {
       outline: 2px dashed rgba(255,255,255,.35);
       outline-offset: 2px;
@@ -66,10 +67,10 @@
     <div class="row">
       <b>Overlay ID:</b>
       <input id="overlayId" />
-      <span class="small">Одинаковый с overlay.html?id=...</span>
+      <span class="small">Должен совпадать с overlay.html?id=...</span>
     </div>
     <div class="small">
-      Подсказка: открывай control так же с параметром, например:
+      Открывай control так же с параметром, например:
       <code>control.html?id=default</code>
     </div>
   </div>
@@ -86,7 +87,7 @@
 
   <div class="card">
     <div class="row">
-      <input id="imgUrl" style="flex:1" placeholder="Прямая ссылка на PNG/WebP (прозрачность ок)" />
+      <input id="imgUrl" style="flex:1" placeholder="Прямая ссылка на PNG/WebP" />
       <select id="newLayer">
         <option value="front">front (поверх HUD)</option>
         <option value="back">back (за HUD)</option>
@@ -100,7 +101,7 @@
 
   <div class="card">
     <b>Поле (перетаскивание):</b>
-    <div class="small"В OBS вставляешь overlay.html.</div>
+    <div class="small">Превью 16:9, внутри 1920×1080. Это то же самое, что в OBS при Browser Source 1920×1080.</div>
     <div id="viewport">
       <div id="stage"></div>
     </div>
@@ -163,7 +164,6 @@
     const viewport = $("viewport");
     const stage = $("stage");
 
-    // overlayId from query ?id=
     const qsId = new URLSearchParams(location.search).get("id") || "default";
     $("overlayId").value = qsId;
 
@@ -192,13 +192,8 @@
       $("rt").disabled = !enabled;
     }
 
-    let selectedId = null;
-    let itemsCache = {};
-    const els = new Map();
-
     function getScale() {
       const rect = viewport.getBoundingClientRect();
-      // viewport is 16:9, so scale is uniform
       return rect.width / VW;
     }
 
@@ -209,18 +204,21 @@
     applyStageScale();
     addEventListener("resize", applyStageScale);
 
+    let selectedId = null;
+    let itemsCache = {};
+    const els = new Map();
+
     function select(id) {
       selectedId = id;
-      for (const [iid, el] of els.entries()) {
-        el.classList.toggle("selected", iid === id);
-      }
+      for (const [iid, el] of els.entries()) el.classList.toggle("selected", iid === id);
 
       if (!id) {
         $("sel").textContent = "Ничего не выбрано";
         setControlsEnabled(false);
         return;
       }
-      const it = itemsCache[id];
+
+      const it = itemsCache[id] || {};
       $("sel").textContent = `Selected: ${id}`;
       setControlsEnabled(true);
 
@@ -252,12 +250,10 @@
       await patchSelected({ hidden: !(it.hidden === true) });
     };
 
-    // Reset выбранной картинки к "норме"
     $("resetBtn").onclick = async () => {
       if (!selectedId) return;
       await patchSelected({
-        x: 80,
-        y: 80,
+        x: 80, y: 80,
         scale: 1,
         rotate: 0,
         opacity: 1,
@@ -268,16 +264,10 @@
 
     async function addImage(url, layer) {
       const id = "img_" + Math.random().toString(16).slice(2);
-
-      // По умолчанию ставим примерно в центр экрана
-      const defaultX = Math.round(VW / 2);
-      const defaultY = Math.round(VH / 2);
-
       await set(ref(db, `${basePath()}/${id}`), {
         url,
         layer: layer === "back" ? "back" : "front",
-        x: defaultX,
-        y: defaultY,
+        x: 80, y: 80,       // top-left
         scale: 1,
         rotate: 0,
         opacity: 1,
@@ -305,16 +295,13 @@
       const o = Number(it.opacity ?? 1);
       const hidden = it.hidden === true;
 
-      // В control делаем минимум видимости, чтобы можно было найти элемент,
-      // даже если opacity=0 в стриме.
+      // В CONTROL делаем минимум видимости, чтобы можно было найти элемент.
       const PREVIEW_MIN_OPACITY = 0.18;
       const previewOpacity = hidden ? 0 : Math.max(o, PREVIEW_MIN_OPACITY);
 
-      el.style.left = x + "px";
-      el.style.top  = y + "px";
-      el.style.opacity = String(previewOpacity);
       el.style.display = hidden ? "none" : "block";
-      el.style.transform = `translate(-50%, -50%) scale(${s}) rotate(${r}deg)`;
+      el.style.opacity = String(previewOpacity);
+      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
 
       el.classList.toggle("lowOpacity", !hidden && o < PREVIEW_MIN_OPACITY);
       el.classList.toggle("selected", isSelected);
@@ -335,7 +322,6 @@
           select(id);
           el.setPointerCapture(e.pointerId);
 
-          const scale = getScale();
           const cur = itemsCache[id] || {};
           drag = {
             sx: e.clientX,
@@ -344,13 +330,13 @@
             by: Number(cur.y ?? 0),
             dx: 0,
             dy: 0,
-            scale
+            scale: getScale()
           };
         });
 
         el.addEventListener("pointermove", (e) => {
           if (!drag) return;
-          // конвертируем движение мыши в координаты 1920x1080
+
           drag.dx = (e.clientX - drag.sx) / drag.scale;
           drag.dy = (e.clientY - drag.sy) / drag.scale;
 
@@ -362,12 +348,9 @@
           const r = Number(cur.rotate ?? 0);
           const o = Number(cur.opacity ?? 1);
 
-          el.style.left = nx + "px";
-          el.style.top  = ny + "px";
-          el.style.transform = `translate(-50%, -50%) scale(${s}) rotate(${r}deg)`;
-
           const PREVIEW_MIN_OPACITY = 0.18;
           el.style.opacity = String(Math.max(o, PREVIEW_MIN_OPACITY));
+          el.style.transform = `translate(${nx}px, ${ny}px) scale(${s}) rotate(${r}deg)`;
         });
 
         el.addEventListener("pointerup", async () => {
@@ -386,10 +369,7 @@
     function prune(items) {
       const alive = new Set(Object.keys(items));
       for (const [id, el] of els.entries()) {
-        if (!alive.has(id)) {
-          el.remove();
-          els.delete(id);
-        }
+        if (!alive.has(id)) { el.remove(); els.delete(id); }
       }
       if (selectedId && !alive.has(selectedId)) select(null);
     }
