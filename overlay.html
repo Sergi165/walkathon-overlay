@@ -15,6 +15,23 @@
       color: #fff;
     }
 
+    /* ====== IMAGE LAYERS ====== */
+    .imgLayer{
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    /* back layer is earlier in DOM -> behind HUD by default */
+    /* front layer is later in DOM -> above HUD */
+    .ovItem{
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: top left;
+      will-change: transform, opacity;
+    }
+
     .clockbox {
       position: absolute;
       left: 18px;
@@ -146,6 +163,9 @@
   </style>
 </head>
 <body>
+  <!-- BACK images (behind HUD) -->
+  <div class="imgLayer" id="imgBack"></div>
+
   <div class="clockbox">
     <div class="city" id="city">LOADING LOCATION...</div>
 
@@ -180,6 +200,9 @@
 
     <div class="pct" id="pct">0.0%</div>
   </div>
+
+  <!-- FRONT images (above HUD) -->
+  <div class="imgLayer" id="imgFront"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -245,9 +268,7 @@
         const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
         const now = Date.now();
 
-        if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) {
-          return;
-        }
+        if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) return;
 
         lastWeatherKey = roundedKey;
         lastWeatherFetchAt = now;
@@ -263,11 +284,7 @@
 
         const geoRes = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`,
-          {
-            headers: {
-              "Accept": "application/json"
-            }
-          }
+          { headers: { "Accept": "application/json" } }
         );
         const geoData = await geoRes.json();
 
@@ -280,11 +297,7 @@
             geoData.address.county ||
             'UNKNOWN';
 
-          const country =
-            geoData.address.country_code
-              ? geoData.address.country_code.toUpperCase()
-              : '';
-
+          const country = geoData.address.country_code ? geoData.address.country_code.toUpperCase() : '';
           cityEl.textContent = `${city} · ${country}`;
         } else {
           cityEl.textContent = 'LOCATION UNKNOWN';
@@ -294,6 +307,7 @@
       }
     }
 
+    // ====== MAIN STATE ======
     const stateRef = ref(db, 'walkathon/state');
 
     onValue(stateRef, (snap) => {
@@ -316,6 +330,64 @@
       } else {
         cityEl.textContent = 'WAITING FOR GPS...';
       }
+    });
+
+    // ====== FRIEND-CONTROLLED IMAGES ======
+    const overlayId = new URLSearchParams(location.search).get("id") || "default";
+    const imgBack = document.getElementById("imgBack");
+    const imgFront = document.getElementById("imgFront");
+
+    const itemsRef = ref(db, `walkathon/overlays/${overlayId}/items`);
+    const itemEls = new Map();
+
+    function getLayerEl(layer) {
+      return (layer === "back") ? imgBack : imgFront; // default front
+    }
+
+    function upsertItem(id, it) {
+      let el = itemEls.get(id);
+      const layer = it.layer === "back" ? "back" : "front";
+      const parent = getLayerEl(layer);
+
+      if (!el) {
+        el = document.createElement("img");
+        el.className = "ovItem";
+        itemEls.set(id, el);
+        parent.appendChild(el);
+      } else {
+        // if layer changed, move element
+        if (el.parentElement !== parent) parent.appendChild(el);
+      }
+
+      el.src = it.url || "";
+
+      const x = Number(it.x ?? 0);
+      const y = Number(it.y ?? 0);
+      const s = Number(it.scale ?? 1);
+      const r = Number(it.rotate ?? 0);
+      const o = Number(it.opacity ?? 1);
+
+      const hidden = it.hidden === true;
+      el.style.display = hidden ? "none" : "block";
+
+      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
+      el.style.opacity = String(o);
+    }
+
+    function pruneItems(alive) {
+      for (const [id, el] of itemEls.entries()) {
+        if (!alive.has(id)) {
+          el.remove();
+          itemEls.delete(id);
+        }
+      }
+    }
+
+    onValue(itemsRef, (snap) => {
+      const items = snap.val() || {};
+      const alive = new Set(Object.keys(items));
+      for (const id of Object.keys(items)) upsertItem(id, items[id]);
+      pruneItems(alive);
     });
   </script>
 </body>
