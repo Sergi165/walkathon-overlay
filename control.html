@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Overlay Control</title>
   <style>
-    body { font-family: system-ui, Arial; margin:16px; }
-    input, button { font-size:14px; padding:8px; }
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    input, button, select { font-size: 14px; padding: 8px; }
     .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+    .card { border:1px solid #ddd; padding:10px; border-radius:10px; margin:10px 0; }
+    .small { color:#666; font-size:12px; }
+
     #canvas {
       width: 100%;
       height: 60vh;
@@ -15,75 +18,107 @@
       position: relative;
       overflow: hidden;
       background: #111;
+      border-radius: 10px;
     }
     .item {
       position:absolute;
       transform-origin: top left;
       cursor: move;
       user-select:none;
+      -webkit-user-select:none;
+      touch-action: none;
     }
-    .panel { display:grid; gap:8px; max-width:900px; }
-    .small { color:#666; font-size:12px; }
-    .card { border:1px solid #ddd; padding:10px; border-radius:8px; }
-    .list { display:grid; gap:8px; }
-    label { font-size:12px; color:#333; }
+    label { font-size:12px; color:#333; display:flex; flex-direction:column; gap:4px; }
   </style>
 </head>
 <body>
   <h2>Overlay Control</h2>
 
-  <div class="panel">
-    <div class="card">
-      <div class="row">
-        <b>Overlay ID:</b>
-        <input id="overlayId" value="default" />
-        <span class="small">Должен совпадать с ?id=... в overlay.html</span>
-      </div>
+  <div class="card">
+    <div class="row">
+      <b>Overlay ID:</b>
+      <input id="overlayId" />
+      <span class="small">Одинаковый с overlay.html?id=...</span>
+    </div>
+    <div class="small">
+      Подсказка: открывай control так же с параметром, например:
+      <code>control.html?id=default</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <input id="email" placeholder="email" />
+      <input id="pass" placeholder="password" type="password" />
+      <button id="loginBtn">Login</button>
+      <button id="logoutBtn" disabled>Logout</button>
+      <span id="authState" class="small"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <input id="imgUrl" style="flex:1" placeholder="Прямая ссылка на PNG/WebP (прозрачность ок)" />
+      <select id="newLayer">
+        <option value="front">front (поверх всего)</option>
+        <option value="back">back (за HUD)</option>
+      </select>
+      <button id="addBtn">Add</button>
+    </div>
+    <div class="small">
+      Нужна прямая ссылка на файл. Лучше PNG/WebP. Если хостинг блокирует hotlink — картинка не покажется.
+    </div>
+  </div>
+
+  <div class="card">
+    <b>Поле (перетаскивание):</b>
+    <div class="small">Это предпросмотр. В OBS вставляешь overlay.html.</div>
+    <div id="canvas"></div>
+  </div>
+
+  <div class="card">
+    <b>Выбранный элемент:</b>
+    <div class="row">
+      <span class="small" id="sel">Ничего не выбрано</span>
+      <button id="delBtn" disabled>Delete</button>
+      <button id="hideBtn" disabled>Hide/Show</button>
     </div>
 
-    <div class="card" id="authCard">
-      <div class="row">
-        <input id="email" placeholder="email" />
-        <input id="pass" placeholder="password" type="password" />
-        <button id="loginBtn">Login</button>
-        <button id="logoutBtn" disabled>Logout</button>
-        <span id="authState" class="small"></span>
-      </div>
-    </div>
+    <div class="row">
+      <label>Layer
+        <select id="layerSel" disabled>
+          <option value="front">front</option>
+          <option value="back">back</option>
+        </select>
+      </label>
 
-    <div class="card">
-      <div class="row">
-        <input id="imgUrl" style="flex:1" placeholder="URL картинки (лучше прямой .png/.webp)" />
-        <button id="addBtn">Add image</button>
-      </div>
-      <div class="small">
-        Для прозрачности используй PNG/WebP. Ссылки должны быть прямые (иногда хостинги блокируют hotlink).
-      </div>
-    </div>
+      <label>Opacity
+        <input id="op" type="range" min="0" max="1" step="0.01" value="1" disabled>
+      </label>
 
-    <div class="card">
-      <b>Поле (для удобного перетаскивания):</b>
-      <div class="small">Это не OBS, это предпросмотр. В OBS вставляешь overlay.html.</div>
-      <div id="canvas"></div>
-    </div>
+      <label>Scale
+        <input id="sc" type="range" min="0.1" max="3" step="0.01" value="1" disabled>
+      </label>
 
-    <div class="card">
-      <b>Список элементов:</b>
-      <div id="list" class="list"></div>
+      <label>Rotate
+        <input id="rt" type="range" min="-180" max="180" step="1" value="0" disabled>
+      </label>
     </div>
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import {
-      getDatabase, ref, onValue, update, set, remove
-    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
-    import {
-      getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
-    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onValue, set, update, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
-      // TODO: ВСТАВЬ СВОЙ firebaseConfig
+      apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo",
+      authDomain: "walkathon-a4233.firebaseapp.com",
+      databaseURL: "https://walkathon-a4233-default-rtdb.europe-west1.firebasedatabase.app/",
+      projectId: "walkathon-a4233",
+      storageBucket: "walkathon-a4233.firebasestorage.app",
+      messagingSenderId: "314823180241",
+      appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -91,18 +126,14 @@
     const auth = getAuth(app);
 
     const $ = (id) => document.getElementById(id);
-
     const canvas = $("canvas");
-    const list = $("list");
+
+    // Overlay ID from query ?id=
+    const qsId = new URLSearchParams(location.search).get("id") || "default";
+    $("overlayId").value = qsId;
 
     let overlayId = $("overlayId").value.trim() || "default";
-    function itemsPath() { return `overlays/${overlayId}/items`; }
-    function itemsRef() { return ref(db, itemsPath()); }
-
-    $("overlayId").addEventListener("change", () => {
-      overlayId = $("overlayId").value.trim() || "default";
-      bind();
-    });
+    function basePath() { return `walkathon/overlays/${overlayId}/items`; }
 
     // Auth
     $("loginBtn").onclick = async () => {
@@ -116,43 +147,84 @@
       $("loginBtn").disabled = !!user;
     });
 
-    // UI state
-    const els = new Map(); // id -> img element
-
-    function renderList(items) {
-      list.innerHTML = "";
-      for (const [id, it] of Object.entries(items)) {
-        const card = document.createElement("div");
-        card.className = "card";
-
-        card.innerHTML = `
-          <div class="small"><b>${id}</b></div>
-          <div class="row">
-            <label>Opacity <input data-k="opacity" type="range" min="0" max="1" step="0.01" value="${it.opacity ?? 1}"></label>
-            <label>Scale <input data-k="scale" type="range" min="0.1" max="3" step="0.01" value="${it.scale ?? 1}"></label>
-            <label>Rotate <input data-k="rotate" type="range" min="-180" max="180" step="1" value="${it.rotate ?? 0}"></label>
-            <button data-del="1">Delete</button>
-          </div>
-          <div class="small">x:${it.x ?? 0} y:${it.y ?? 0} z:${it.z ?? 1}</div>
-        `;
-
-        card.querySelectorAll("input[type=range]").forEach(inp => {
-          inp.addEventListener("input", async () => {
-            const k = inp.getAttribute("data-k");
-            const v = (k === "rotate") ? Number(inp.value) : Number(inp.value);
-            await update(ref(db, `${itemsPath()}/${id}`), { [k]: v });
-          });
-        });
-
-        card.querySelector("[data-del]").onclick = async () => {
-          await remove(ref(db, `${itemsPath()}/${id}`));
-        };
-
-        list.appendChild(card);
-      }
+    // Selection UI enable/disable
+    function setControlsEnabled(enabled) {
+      $("delBtn").disabled = !enabled;
+      $("hideBtn").disabled = !enabled;
+      $("layerSel").disabled = !enabled;
+      $("op").disabled = !enabled;
+      $("sc").disabled = !enabled;
+      $("rt").disabled = !enabled;
     }
 
-    function upsertCanvasItem(id, it) {
+    let selectedId = null;
+    let itemsCache = {};
+    const els = new Map();
+
+    function select(id) {
+      selectedId = id;
+      if (!id) {
+        $("sel").textContent = "Ничего не выбрано";
+        setControlsEnabled(false);
+        return;
+      }
+      const it = itemsCache[id];
+      $("sel").textContent = `Selected: ${id}`;
+      setControlsEnabled(true);
+      $("layerSel").value = it.layer === "back" ? "back" : "front";
+      $("op").value = it.opacity ?? 1;
+      $("sc").value = it.scale ?? 1;
+      $("rt").value = it.rotate ?? 0;
+    }
+
+    async function patchSelected(patch) {
+      if (!selectedId) return;
+      await update(ref(db, `${basePath()}/${selectedId}`), patch);
+    }
+
+    $("layerSel").addEventListener("change", () => patchSelected({ layer: $("layerSel").value }));
+    $("op").addEventListener("input", () => patchSelected({ opacity: Number($("op").value) }));
+    $("sc").addEventListener("input", () => patchSelected({ scale: Number($("sc").value) }));
+    $("rt").addEventListener("input", () => patchSelected({ rotate: Number($("rt").value) }));
+
+    $("delBtn").onclick = async () => {
+      if (!selectedId) return;
+      await remove(ref(db, `${basePath()}/${selectedId}`));
+      select(null);
+    };
+
+    $("hideBtn").onclick = async () => {
+      if (!selectedId) return;
+      const it = itemsCache[selectedId] || {};
+      await patchSelected({ hidden: !(it.hidden === true) });
+    };
+
+    async function addImage(url, layer) {
+      const id = "img_" + Math.random().toString(16).slice(2);
+      await set(ref(db, `${basePath()}/${id}`), {
+        url,
+        layer: layer === "back" ? "back" : "front",
+        x: 80, y: 80,
+        scale: 1,
+        rotate: 0,
+        opacity: 1,
+        hidden: false
+      });
+    }
+
+    $("addBtn").onclick = async () => {
+      const url = $("imgUrl").value.trim();
+      if (!url) return alert("Вставь URL картинки");
+      await addImage(url, $("newLayer").value);
+      $("imgUrl").value = "";
+    };
+
+    $("overlayId").addEventListener("change", () => {
+      overlayId = $("overlayId").value.trim() || "default";
+      bind();
+    });
+
+    function upsert(id, it) {
       let el = els.get(id);
       if (!el) {
         el = document.createElement("img");
@@ -161,85 +233,88 @@
         els.set(id, el);
         canvas.appendChild(el);
 
-        // Drag
-        let dragging = false;
-        let startX=0, startY=0, baseX=0, baseY=0;
+        // Drag logic
+        let drag = null;
 
         el.addEventListener("pointerdown", (e) => {
-          dragging = true;
+          select(id);
           el.setPointerCapture(e.pointerId);
-          startX = e.clientX; startY = e.clientY;
-          baseX = it.x ?? 0; baseY = it.y ?? 0;
+          drag = {
+            sx: e.clientX,
+            sy: e.clientY,
+            bx: Number((itemsCache[id]?.x) ?? 0),
+            by: Number((itemsCache[id]?.y) ?? 0),
+            dx: 0,
+            dy: 0
+          };
         });
 
-        el.addEventListener("pointermove", async (e) => {
-          if (!dragging) return;
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-          const nx = Math.round(baseX + dx);
-          const ny = Math.round(baseY + dy);
-          el.style.left = nx + "px";
-          el.style.top = ny + "px";
+        el.addEventListener("pointermove", (e) => {
+          if (!drag) return;
+          drag.dx = e.clientX - drag.sx;
+          drag.dy = e.clientY - drag.sy;
+          const nx = Math.round(drag.bx + drag.dx);
+          const ny = Math.round(drag.by + drag.dy);
+
+          const cur = itemsCache[id] || {};
+          const s = Number(cur.scale ?? 1);
+          const r = Number(cur.rotate ?? 0);
+
+          el.style.transform = `translate(${nx}px, ${ny}px) scale(${s}) rotate(${r}deg)`;
         });
 
-        el.addEventListener("pointerup", async (e) => {
-          if (!dragging) return;
-          dragging = false;
-          const left = parseInt(el.style.left || "0", 10);
-          const top  = parseInt(el.style.top || "0", 10);
-          await update(ref(db, `${itemsPath()}/${id}`), { x: left, y: top });
+        el.addEventListener("pointerup", async () => {
+          if (!drag) return;
+          const nx = Math.round(drag.bx + drag.dx);
+          const ny = Math.round(drag.by + drag.dy);
+          drag = null;
+          await update(ref(db, `${basePath()}/${id}`), { x: nx, y: ny });
         });
       }
 
       el.src = it.url || "";
-      el.style.left = (it.x ?? 0) + "px";
-      el.style.top = (it.y ?? 0) + "px";
-      el.style.opacity = (it.opacity ?? 1);
-      el.style.transform = `scale(${it.scale ?? 1}) rotate(${it.rotate ?? 0}deg)`;
-      el.style.zIndex = it.z ?? 1;
+      const x = Number(it.x ?? 0);
+      const y = Number(it.y ?? 0);
+      const s = Number(it.scale ?? 1);
+      const r = Number(it.rotate ?? 0);
+      const o = Number(it.opacity ?? 1);
+      const hidden = it.hidden === true;
+
+      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
+      el.style.opacity = String(o);
+      el.style.display = hidden ? "none" : "block";
     }
 
-    function pruneCanvas(items) {
+    function prune(items) {
       const alive = new Set(Object.keys(items));
       for (const [id, el] of els.entries()) {
-        if (!alive.has(id)) { el.remove(); els.delete(id); }
+        if (!alive.has(id)) {
+          el.remove();
+          els.delete(id);
+        }
       }
+      if (selectedId && !alive.has(selectedId)) select(null);
     }
 
-    async function addImageByUrl(url) {
-      const id = "img_" + Math.random().toString(16).slice(2);
-      await set(ref(db, `${itemsPath()}/${id}`), {
-        url,
-        x: 50, y: 50,
-        scale: 1,
-        rotate: 0,
-        opacity: 1,
-        z: 1
-      });
-    }
-
-    $("addBtn").onclick = async () => {
-      const url = $("imgUrl").value.trim();
-      if (!url) return alert("Вставь URL картинки");
-      await addImageByUrl(url);
-      $("imgUrl").value = "";
-    };
-
-    let unsub = null;
+    let unsubBound = false;
     function bind() {
       canvas.innerHTML = "";
-      list.innerHTML = "";
       els.clear();
+      itemsCache = {};
+      select(null);
 
-      onValue(itemsRef(), (snap) => {
+      const r = ref(db, basePath());
+      onValue(r, (snap) => {
         const items = snap.val() || {};
-        for (const [id, it] of Object.entries(items)) upsertCanvasItem(id, it);
-        pruneCanvas(items);
-        renderList(items);
+        itemsCache = items;
+        for (const id of Object.keys(items)) upsert(id, items[id]);
+        prune(items);
       });
+
+      unsubBound = true;
     }
 
-    bind();
+    if (!unsubBound) bind();
   </script>
 </body>
 </html>
