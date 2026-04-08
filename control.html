@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Overlay Control</title>
+  <style>
+    body { font-family: system-ui, Arial; margin:16px; }
+    input, button { font-size:14px; padding:8px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+    #canvas {
+      width: 100%;
+      height: 60vh;
+      border: 1px dashed #999;
+      position: relative;
+      overflow: hidden;
+      background: #111;
+    }
+    .item {
+      position:absolute;
+      transform-origin: top left;
+      cursor: move;
+      user-select:none;
+    }
+    .panel { display:grid; gap:8px; max-width:900px; }
+    .small { color:#666; font-size:12px; }
+    .card { border:1px solid #ddd; padding:10px; border-radius:8px; }
+    .list { display:grid; gap:8px; }
+    label { font-size:12px; color:#333; }
+  </style>
+</head>
+<body>
+  <h2>Overlay Control</h2>
+
+  <div class="panel">
+    <div class="card">
+      <div class="row">
+        <b>Overlay ID:</b>
+        <input id="overlayId" value="default" />
+        <span class="small">Должен совпадать с ?id=... в overlay.html</span>
+      </div>
+    </div>
+
+    <div class="card" id="authCard">
+      <div class="row">
+        <input id="email" placeholder="email" />
+        <input id="pass" placeholder="password" type="password" />
+        <button id="loginBtn">Login</button>
+        <button id="logoutBtn" disabled>Logout</button>
+        <span id="authState" class="small"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input id="imgUrl" style="flex:1" placeholder="URL картинки (лучше прямой .png/.webp)" />
+        <button id="addBtn">Add image</button>
+      </div>
+      <div class="small">
+        Для прозрачности используй PNG/WebP. Ссылки должны быть прямые (иногда хостинги блокируют hotlink).
+      </div>
+    </div>
+
+    <div class="card">
+      <b>Поле (для удобного перетаскивания):</b>
+      <div class="small">Это не OBS, это предпросмотр. В OBS вставляешь overlay.html.</div>
+      <div id="canvas"></div>
+    </div>
+
+    <div class="card">
+      <b>Список элементов:</b>
+      <div id="list" class="list"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import {
+      getDatabase, ref, onValue, update, set, remove
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+    import {
+      getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+
+    const firebaseConfig = {
+      // TODO: ВСТАВЬ СВОЙ firebaseConfig
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+
+    const $ = (id) => document.getElementById(id);
+
+    const canvas = $("canvas");
+    const list = $("list");
+
+    let overlayId = $("overlayId").value.trim() || "default";
+    function itemsPath() { return `overlays/${overlayId}/items`; }
+    function itemsRef() { return ref(db, itemsPath()); }
+
+    $("overlayId").addEventListener("change", () => {
+      overlayId = $("overlayId").value.trim() || "default";
+      bind();
+    });
+
+    // Auth
+    $("loginBtn").onclick = async () => {
+      await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value);
+    };
+    $("logoutBtn").onclick = async () => signOut(auth);
+
+    onAuthStateChanged(auth, (user) => {
+      $("authState").textContent = user ? `Logged: ${user.email}` : "Not logged";
+      $("logoutBtn").disabled = !user;
+      $("loginBtn").disabled = !!user;
+    });
+
+    // UI state
+    const els = new Map(); // id -> img element
+
+    function renderList(items) {
+      list.innerHTML = "";
+      for (const [id, it] of Object.entries(items)) {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+          <div class="small"><b>${id}</b></div>
+          <div class="row">
+            <label>Opacity <input data-k="opacity" type="range" min="0" max="1" step="0.01" value="${it.opacity ?? 1}"></label>
+            <label>Scale <input data-k="scale" type="range" min="0.1" max="3" step="0.01" value="${it.scale ?? 1}"></label>
+            <label>Rotate <input data-k="rotate" type="range" min="-180" max="180" step="1" value="${it.rotate ?? 0}"></label>
+            <button data-del="1">Delete</button>
+          </div>
+          <div class="small">x:${it.x ?? 0} y:${it.y ?? 0} z:${it.z ?? 1}</div>
+        `;
+
+        card.querySelectorAll("input[type=range]").forEach(inp => {
+          inp.addEventListener("input", async () => {
+            const k = inp.getAttribute("data-k");
+            const v = (k === "rotate") ? Number(inp.value) : Number(inp.value);
+            await update(ref(db, `${itemsPath()}/${id}`), { [k]: v });
+          });
+        });
+
+        card.querySelector("[data-del]").onclick = async () => {
+          await remove(ref(db, `${itemsPath()}/${id}`));
+        };
+
+        list.appendChild(card);
+      }
+    }
+
+    function upsertCanvasItem(id, it) {
+      let el = els.get(id);
+      if (!el) {
+        el = document.createElement("img");
+        el.className = "item";
+        el.draggable = false;
+        els.set(id, el);
+        canvas.appendChild(el);
+
+        // Drag
+        let dragging = false;
+        let startX=0, startY=0, baseX=0, baseY=0;
+
+        el.addEventListener("pointerdown", (e) => {
+          dragging = true;
+          el.setPointerCapture(e.pointerId);
+          startX = e.clientX; startY = e.clientY;
+          baseX = it.x ?? 0; baseY = it.y ?? 0;
+        });
+
+        el.addEventListener("pointermove", async (e) => {
+          if (!dragging) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const nx = Math.round(baseX + dx);
+          const ny = Math.round(baseY + dy);
+          el.style.left = nx + "px";
+          el.style.top = ny + "px";
+        });
+
+        el.addEventListener("pointerup", async (e) => {
+          if (!dragging) return;
+          dragging = false;
+          const left = parseInt(el.style.left || "0", 10);
+          const top  = parseInt(el.style.top || "0", 10);
+          await update(ref(db, `${itemsPath()}/${id}`), { x: left, y: top });
+        });
+      }
+
+      el.src = it.url || "";
+      el.style.left = (it.x ?? 0) + "px";
+      el.style.top = (it.y ?? 0) + "px";
+      el.style.opacity = (it.opacity ?? 1);
+      el.style.transform = `scale(${it.scale ?? 1}) rotate(${it.rotate ?? 0}deg)`;
+      el.style.zIndex = it.z ?? 1;
+    }
+
+    function pruneCanvas(items) {
+      const alive = new Set(Object.keys(items));
+      for (const [id, el] of els.entries()) {
+        if (!alive.has(id)) { el.remove(); els.delete(id); }
+      }
+    }
+
+    async function addImageByUrl(url) {
+      const id = "img_" + Math.random().toString(16).slice(2);
+      await set(ref(db, `${itemsPath()}/${id}`), {
+        url,
+        x: 50, y: 50,
+        scale: 1,
+        rotate: 0,
+        opacity: 1,
+        z: 1
+      });
+    }
+
+    $("addBtn").onclick = async () => {
+      const url = $("imgUrl").value.trim();
+      if (!url) return alert("Вставь URL картинки");
+      await addImageByUrl(url);
+      $("imgUrl").value = "";
+    };
+
+    let unsub = null;
+    function bind() {
+      canvas.innerHTML = "";
+      list.innerHTML = "";
+      els.clear();
+
+      onValue(itemsRef(), (snap) => {
+        const items = snap.val() || {};
+        for (const [id, it] of Object.entries(items)) upsertCanvasItem(id, it);
+        pruneCanvas(items);
+        renderList(items);
+      });
+    }
+
+    bind();
+  </script>
+</body>
+</html>
