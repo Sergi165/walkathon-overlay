@@ -191,7 +191,6 @@
     const resetBtn = document.getElementById("resetBtn");
 
     let authed = false;
-
     function setBtnsEnabled(v){
       startBtn.disabled = !v;
       stopBtn.disabled  = !v;
@@ -219,7 +218,7 @@
       statusEl.textContent = "auth error";
     });
 
-    // ВСЕГДА В МЕТРАХ
+    // всегда в метрах
     function fmtMeters(m) {
       return Math.round(Number(m || 0)) + "m";
     }
@@ -256,7 +255,7 @@
       return 2 * R * Math.asin(Math.sqrt(a));
     }
 
-    // Пишем только distance/status/gps (не трогаем goal/follows)
+    // Пишем только distance/status/gps. НЕ трогаем goal/follows.
     async function pushState(status, extra = {}) {
       try {
         if (!authed) await ensureAuth();
@@ -326,22 +325,36 @@
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
-      await pushState("stopped");
+
+      // Можно оставить координаты (последние), но ты просил сброс — поэтому чистим
+      await pushState("stopped", {
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+        speed: null
+      });
+
       statusEl.textContent = "stopped";
     }
 
     async function resetGPS() {
-      if (!confirm("Сбросить дистанцию?")) return;
+      if (!confirm("Сбросить дистанцию и локацию?")) return;
       distanceMeters = 0;
       lastPoint = null;
       updateUI({ status: "reset", acc: null, speed: null });
 
       try {
         if (!authed) await ensureAuth();
+
+        // ВАЖНО: null удаляет поля в RTDB => локация реально “сбрасывается”
         await update(stateRef, {
           distanceMeters: 0,
           status: "reset",
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
+          latitude: null,
+          longitude: null,
+          accuracy: null,
+          speed: null
         });
       } catch (e) {
         console.log("resetGPS error", e);
@@ -355,7 +368,10 @@
 
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
-      goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
+      goalMeters = (typeof s.goalMeters === "number")
+        ? Number(s.goalMeters || DEFAULT_GOAL_METERS)
+        : DEFAULT_GOAL_METERS;
+
       if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
 
       updateUI({
@@ -377,7 +393,6 @@
     }
     let smoothHeading = 0;
     let hasHeading = false;
-
     function angleDelta(a, b) { return (b - a + 540) % 360 - 180; }
 
     function setHeading(deg) {
