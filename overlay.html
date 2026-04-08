@@ -5,163 +5,164 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Walkathon Overlay</title>
   <style>
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      background: transparent;
-      overflow: hidden;
+    html, body{
+      margin:0;
+      width:100%;
+      height:100%;
+      background:transparent;
+      overflow:hidden;
       font-family: Arial, sans-serif;
-      color: #fff;
+      color:#fff;
     }
 
     /* ====== FRIEND IMAGES LAYERS ====== */
     .imgLayer{
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      overflow: hidden;
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      overflow:hidden;
     }
-    #imgBack { z-index: 1; }
-    #hudWrap { z-index: 10; position: absolute; inset: 0; }
-    #imgFront { z-index: 20; }
+    #imgBack{ z-index: 1; }
+    #hudWrap{ z-index: 10; position:absolute; inset:0; }
+    #imgFront{ z-index: 20; }
 
     .ovItem{
       position:absolute;
       left:0;
       top:0;
-      transform-origin:center center; /* вращение вокруг центра */
+      transform-origin:center center;
       will-change: transform, opacity;
     }
 
-    /* ====== YOUR HUD ====== */
-    .clockbox {
-      position: absolute;
-      left: 18px;
-      bottom: 190px;
-      width: 320px;
-      padding: 14px 16px;
+    /* ====== TOP WEATHER STRIP ====== */
+    .weatherStrip{
+      position:absolute;
+      left:18px;
+      bottom: 260px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:10px 12px;
+      border-radius:12px;
       background: rgba(10,10,16,.62);
       border-left: 4px solid #7c3aed;
-      border-radius: 12px;
       box-shadow: 0 8px 30px rgba(0,0,0,.25);
       backdrop-filter: blur(4px);
     }
-
-    .city {
-      font-size: 12px;
-      letter-spacing: .18em;
-      color: #c6c8d0;
-      font-weight: 700;
-      margin-bottom: 6px;
-      text-transform: uppercase;
-    }
-
-    .clockrow {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-
-    .clock {
-      font-size: 64px;
-      font-weight: 800;
-      line-height: 1;
-      letter-spacing: 1px;
-    }
-
-    .divider {
-      height: 1px;
-      background: rgba(255,255,255,.12);
-      margin: 10px 0 10px;
-    }
-
-    .weatherrow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 18px;
-      font-weight: 700;
-    }
-
-    .temp {
-      font-size: 18px;
-      color: #fff;
-    }
-
-    .date {
-      font-size: 15px;
-      color: #c5c7d0;
-      font-weight: 600;
-    }
-
-    .hud {
-      position: absolute;
-      left: 18px;
-      bottom: 18px;
-      width: 360px;
-      padding: 14px;
-      background: rgba(0,0,0,.42);
-      border-radius: 14px;
-      box-shadow: 0 8px 30px rgba(0,0,0,.25);
-    }
-
-    .topline {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .done {
-      font-size: 42px;
-      font-weight: 700;
-      color: #39ff14;
-      line-height: 1;
-      text-shadow: 0 0 8px rgba(57,255,20,.25);
-    }
-
-    .goal {
-      font-size: 14px;
-      opacity: .85;
-    }
-
-    .left {
-      margin-top: 10px;
-      font-size: 18px;
-      color: #7CFF6B;
-      font-weight: 700;
-    }
-
-    .sub {
-      margin-top: 8px;
-      font-size: 14px;
-      opacity: .92;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .bar {
-      margin-top: 12px;
-      height: 18px;
-      background: rgba(255,255,255,.16);
-      border-radius: 999px;
+    .wsCity{
+      font-size:12px;
+      letter-spacing:.16em;
+      color:#c6c8d0;
+      font-weight:800;
+      text-transform:uppercase;
+      max-width: 360px;
+      white-space: nowrap;
       overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .wsTemp{
+      font-size:16px;
+      font-weight:800;
+    }
+    .wsClock{
+      font-size:16px;
+      font-weight:900;
+      letter-spacing:.04em;
+    }
+    .wsDate{
+      font-size:12px;
+      color:#c6c8d0;
+      font-weight:700;
+    }
+    .wsSep{
+      width:1px;
+      height:18px;
+      background: rgba(255,255,255,.14);
+      margin: 0 2px;
     }
 
-    .fill {
+    /* ====== MAIN PANEL (LIKE YOUR SCREENSHOT) ====== */
+    .panel{
+      position:absolute;
+      left:18px;
+      bottom:18px;
+      width: 520px;
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(0,0,0,.55);
+      box-shadow: 0 10px 34px rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+    }
+
+    .leftBig{
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: .5px;
+      color: #39ff14;
+      text-shadow: 0 0 10px rgba(57,255,20,.22);
+      line-height: 1.05;
+      margin-bottom: 10px;
+    }
+
+    .rowTop{
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:10px;
+      margin-top: 4px;
+      margin-bottom: 6px;
+    }
+    .label{
+      font-size: 12px;
+      color: rgba(255,255,255,.75);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+    .valueSmall{
+      font-size: 12px;
+      color: rgba(255,255,255,.75);
+      font-weight: 800;
+    }
+
+    .bar{
+      height: 16px;
+      background: rgba(255,255,255,.12);
+      border-radius: 999px;
+      overflow:hidden;
+      margin-bottom: 12px;
+    }
+    .fillGreen{
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #39ff14, #00d26a);
-      transition: width .4s ease;
+      background: linear-gradient(90deg,#39ff14,#00d26a);
+      transition: width .25s ease;
+    }
+    .fillPurple{
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg,#7c3aed,#b68cff);
+      transition: width .25s ease;
     }
 
-    .pct {
-      margin-top: 8px;
+    .footer{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
       font-size: 13px;
-      opacity: .9;
-      text-align: right;
+      color: rgba(255,255,255,.75);
+      font-weight: 800;
+    }
+    .footer b{
+      color:#fff;
+      font-weight:900;
+    }
+    .status{
+      margin-top: 8px;
+      font-size: 12px;
+      color: rgba(255,255,255,.65);
+      font-weight: 700;
+      letter-spacing: .03em;
     }
   </style>
 </head>
@@ -171,39 +172,44 @@
 
   <!-- HUD wrapper -->
   <div id="hudWrap">
-    <div class="clockbox">
-      <div class="city" id="city">LOADING LOCATION...</div>
-
-      <div class="clockrow">
-        <div class="clock" id="clock">00:00:00</div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="weatherrow">
-        <div class="temp" id="temp">--°C</div>
-        <div class="date" id="date">---</div>
+    <!-- Weather strip (keep weather!) -->
+    <div class="weatherStrip">
+      <div class="wsCity" id="city">WAITING FOR GPS...</div>
+      <div class="wsSep"></div>
+      <div class="wsTemp" id="temp">--°C</div>
+      <div class="wsSep"></div>
+      <div>
+        <div class="wsClock" id="clock">00:00:00</div>
+        <div class="wsDate" id="date">---</div>
       </div>
     </div>
 
-    <div class="hud">
-      <div class="topline">
-        <div class="done" id="done">0m</div>
-        <div class="goal" id="goal">GOAL: 10km</div>
+    <!-- Main panel -->
+    <div class="panel">
+      <div class="leftBig" id="leftBig">LEFT: 0m</div>
+
+      <!-- "Current lap" like in your screenshot.
+           По умолчанию это прогресс до следующего 1км (lapGoal=1000),
+           можно поменять из базы: walkathon/state/lapGoalMeters -->
+      <div class="rowTop">
+        <div class="label" id="lapTitle">CURRENT LAP</div>
+        <div class="valueSmall" id="lapValue">0m / 1.00km</div>
+      </div>
+      <div class="bar"><div class="fillGreen" id="lapFill"></div></div>
+
+      <!-- Total goal -->
+      <div class="rowTop">
+        <div class="label" id="totalTitle">TOTAL WALKATHON GOAL</div>
+        <div class="valueSmall" id="totalPct">0%</div>
+      </div>
+      <div class="bar"><div class="fillPurple" id="totalFill"></div></div>
+
+      <div class="footer">
+        <div>WALKED: <b id="walked">0m</b></div>
+        <div>GOAL: <b id="goalTxt">0m</b></div>
       </div>
 
-      <div class="left" id="left">LEFT: 10000m</div>
-
-      <div class="sub">
-        <span id="walked">WALKED: 0m</span>
-        <span id="status">GPS: idle</span>
-      </div>
-
-      <div class="bar">
-        <div class="fill" id="fill"></div>
-      </div>
-
-      <div class="pct" id="pct">0.0%</div>
+      <div class="status" id="status">GPS: idle</div>
     </div>
   </div>
 
@@ -227,51 +233,56 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    const doneEl = document.getElementById('done');
-    const leftEl = document.getElementById('left');
-    const walkedEl = document.getElementById('walked');
-    const fillEl = document.getElementById('fill');
-    const pctEl = document.getElementById('pct');
-    const statusEl = document.getElementById('status');
-    const goalEl = document.getElementById('goal');
-
-    const clockEl = document.getElementById('clock');
-    const tempEl = document.getElementById('temp');
-    const dateEl = document.getElementById('date');
+    // UI
     const cityEl = document.getElementById('city');
+    const tempEl = document.getElementById('temp');
+    const clockEl = document.getElementById('clock');
+    const dateEl  = document.getElementById('date');
 
-    let lastWeatherKey = '';
-    let lastWeatherFetchAt = 0;
+    const leftBigEl = document.getElementById('leftBig');
+    const lapValueEl = document.getElementById('lapValue');
+    const lapFillEl = document.getElementById('lapFill');
+
+    const totalPctEl = document.getElementById('totalPct');
+    const totalFillEl = document.getElementById('totalFill');
+
+    const walkedEl = document.getElementById('walked');
+    const goalTxtEl = document.getElementById('goalTxt');
+    const statusEl = document.getElementById('status');
+
+    // Clock
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2,'0');
+      const m = String(now.getMinutes()).padStart(2,'0');
+      const s = String(now.getSeconds()).padStart(2,'0');
+      clockEl.textContent = `${h}:${m}:${s}`;
+
+      const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      dateEl.textContent = `${weekdays[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
 
     function fmtMeters(m) {
       if (m >= 1000) return (m / 1000).toFixed(2) + 'km';
       return Math.round(m) + 'm';
     }
 
-    function updateClock() {
-      const now = new Date();
-      const h = String(now.getHours()).padStart(2, '0');
-      const m = String(now.getMinutes()).padStart(2, '0');
-      const s = String(now.getSeconds()).padStart(2, '0');
-      clockEl.textContent = `${h}:${m}:${s}`;
-
-      const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      dateEl.textContent = weekdays[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()];
-    }
-
-    updateClock();
-    setInterval(updateClock, 1000);
+    // Weather/city from GPS
+    let lastWeatherKey = '';
+    let lastWeatherFetchAt = 0;
 
     async function updateWeatherAndCity(lat, lon) {
       try {
         const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
         const now = Date.now();
         if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) return;
-
         lastWeatherKey = roundedKey;
         lastWeatherFetchAt = now;
 
+        // temp
         const weatherRes = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m`
         );
@@ -280,12 +291,12 @@
           tempEl.textContent = Math.round(weatherData.current.temperature_2m) + '°C';
         }
 
+        // city
         const geoRes = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`,
           { headers: { "Accept": "application/json" } }
         );
         const geoData = await geoRes.json();
-
         if (geoData?.address) {
           const city =
             geoData.address.city ||
@@ -294,7 +305,6 @@
             geoData.address.hamlet ||
             geoData.address.county ||
             'UNKNOWN';
-
           const country = geoData.address.country_code ? geoData.address.country_code.toUpperCase() : '';
           cityEl.textContent = `${city} · ${country}`;
         } else {
@@ -305,22 +315,34 @@
       }
     }
 
-    // ===== Walkathon state =====
+    // Main state
     const stateRef = ref(db, 'walkathon/state');
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
-      const distance = Number(s.distanceMeters || 0);
-      const goal = Number(s.goalMeters || 10000);
-      const left = Math.max(goal - distance, 0);
-      const percent = goal > 0 ? Math.min((distance / goal) * 100, 100) : 0;
 
-      doneEl.textContent = fmtMeters(distance);
-      leftEl.textContent = 'LEFT: ' + fmtMeters(left);
-      walkedEl.textContent = 'WALKED: ' + fmtMeters(distance);
-      fillEl.style.width = percent + '%';
-      pctEl.textContent = percent.toFixed(1) + '%';
+      const distance = Number(s.distanceMeters || 0);
+      const goal = Number(s.goalMeters || 25000);
+
+      const left = Math.max(goal - distance, 0);
+      const pct = goal > 0 ? Math.min((distance / goal) * 100, 100) : 0;
+
+      leftBigEl.textContent = `LEFT: ${fmtMeters(left)}`;
+      walkedEl.textContent = fmtMeters(distance);
+      goalTxtEl.textContent = fmtMeters(goal);
+
+      totalPctEl.textContent = `${pct.toFixed(1)}%`;
+      totalFillEl.style.width = pct + '%';
+
+      // "Current lap" (progress to next chunk)
+      // default 1000m, can be set in DB: walkathon/state/lapGoalMeters
+      const lapGoal = Number(s.lapGoalMeters || 1000);
+      const lap = lapGoal > 0 ? (distance % lapGoal) : 0;
+      const lapPct = lapGoal > 0 ? Math.min((lap / lapGoal) * 100, 100) : 0;
+
+      lapValueEl.textContent = `${fmtMeters(lap)} / ${fmtMeters(lapGoal)}`;
+      lapFillEl.style.width = lapPct + '%';
+
       statusEl.textContent = 'GPS: ' + (s.status || 'idle');
-      goalEl.textContent = 'GOAL: ' + fmtMeters(goal);
 
       if (typeof s.latitude === 'number' && typeof s.longitude === 'number') {
         updateWeatherAndCity(s.latitude, s.longitude);
@@ -329,11 +351,10 @@
       }
     });
 
-    // ===== Friend-controlled images =====
+    // Friend-controlled images
     const overlayId = new URLSearchParams(location.search).get("id") || "default";
     const imgBack = document.getElementById("imgBack");
     const imgFront = document.getElementById("imgFront");
-
     const itemsRef = ref(db, `walkathon/overlays/${overlayId}/items`);
     const itemEls = new Map();
 
@@ -355,17 +376,16 @@
       }
 
       el.src = it.url || "";
-
       const x = Number(it.x ?? 0);
       const y = Number(it.y ?? 0);
-      const s = Number(it.scale ?? 1);
-      const r = Number(it.rotate ?? 0);
-      const o = Number(it.opacity ?? 1);
+      const sc = Number(it.scale ?? 1);
+      const rot = Number(it.rotate ?? 0);
+      const op = Number(it.opacity ?? 1);
       const hidden = it.hidden === true;
 
       el.style.display = hidden ? "none" : "block";
-      el.style.opacity = String(o);
-      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
+      el.style.opacity = String(op);
+      el.style.transform = `translate(${x}px, ${y}px) scale(${sc}) rotate(${rot}deg)`;
     }
 
     function pruneItems(alive) {
