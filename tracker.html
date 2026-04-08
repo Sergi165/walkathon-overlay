@@ -124,6 +124,7 @@
     button.primary { background: #1f6feb; }
     button.danger { background: #d73a49; }
     button.ok { background: #238636; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
 
     .compass {
       display: flex;
@@ -267,6 +268,7 @@
         <button class="ok" id="stopBtn">Stop</button>
         <button class="danger" id="resetBtn">Reset</button>
       </div>
+      <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
     </div>
 
     <div class="card">
@@ -295,9 +297,8 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import {
-      getDatabase, ref, set, update, onValue
-    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, set, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo",
@@ -311,6 +312,9 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+
+    const auth = getAuth(app);
+
     const stateRef = ref(db, 'walkathon/state');
 
     const GOAL_METERS = 25000;
@@ -324,6 +328,11 @@
     const statusEl = document.getElementById('status');
     const accEl = document.getElementById('acc');
     const speedEl = document.getElementById('speed');
+    const authInfoEl = document.getElementById('authInfo');
+
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const resetBtn = document.getElementById('resetBtn');
 
     let watchId = null;
     let lastPoint = null;
@@ -333,6 +342,36 @@
       if (m >= 1000) return (m / 1000).toFixed(2) + 'km';
       return Math.round(m) + 'm';
     }
+
+    function setBtnsEnabled(v){
+      startBtn.disabled = !v;
+      stopBtn.disabled = !v;
+      resetBtn.disabled = !v;
+    }
+
+    let authed = false;
+
+    async function ensureAuth() {
+      if (auth.currentUser) return;
+      await signInAnonymously(auth);
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      authed = !!user;
+      setBtnsEnabled(authed);
+      authInfoEl.textContent = user ? "Auth: anonymous OK" : "Auth: ...";
+      if (user && statusEl.textContent === "auth...") statusEl.textContent = "idle";
+    });
+
+    // стартуем авторизацию сразу
+    setBtnsEnabled(false);
+    statusEl.textContent = "auth...";
+    authInfoEl.textContent = "Auth: signing in...";
+    ensureAuth().catch((e) => {
+      console.log("Anonymous auth error:", e);
+      authInfoEl.textContent = "Auth: error (enable Anonymous in Firebase)";
+      statusEl.textContent = "auth error";
+    });
 
     function updateUI(extra = {}) {
       const left = Math.max(GOAL_METERS - distanceMeters, 0);
@@ -362,17 +401,29 @@
     }
 
     async function pushState(status, extra = {}) {
-      await update(stateRef, {
-        distanceMeters: Math.round(distanceMeters),
-        goalMeters: GOAL_METERS,
-        leftMeters: Math.max(GOAL_METERS - Math.round(distanceMeters), 0),
-        status,
-        updatedAt: Date.now(),
-        ...extra
-      });
+      try {
+        if (!authed) await ensureAuth();
+
+        await update(stateRef, {
+          distanceMeters: Math.round(distanceMeters),
+          goalMeters: GOAL_METERS,
+          leftMeters: Math.max(GOAL_METERS - Math.round(distanceMeters), 0),
+          status,
+          updatedAt: Date.now(),
+          ...extra
+        });
+      } catch (e) {
+        console.log("pushState error:", e);
+        statusEl.textContent = "db denied";
+      }
     }
 
     async function startGPS() {
+      try {
+        if (!authed) await ensureAuth();
+      } catch {}
+      if (!authed) return;
+
       if (!('geolocation' in navigator)) {
         alert('Geolocation не поддерживается');
         return;
@@ -394,7 +445,6 @@
 
         if (lastPoint) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
-
           if (step >= MIN_STEP_METERS && step <= MAX_STEP_METERS) {
             distanceMeters += step;
           }
@@ -432,18 +482,25 @@
       distanceMeters = 0;
       lastPoint = null;
       updateUI({ status: 'reset', acc: null, speed: null });
-      await set(stateRef, {
-        distanceMeters: 0,
-        goalMeters: GOAL_METERS,
-        leftMeters: GOAL_METERS,
-        status: 'reset',
-        updatedAt: Date.now()
-      });
+
+      try {
+        if (!authed) await ensureAuth();
+        await set(stateRef, {
+          distanceMeters: 0,
+          goalMeters: GOAL_METERS,
+          leftMeters: GOAL_METERS,
+          status: 'reset',
+          updatedAt: Date.now()
+        });
+      } catch (e) {
+        console.log("resetGPS error:", e);
+        statusEl.textContent = "db denied";
+      }
     }
 
-    document.getElementById('startBtn').onclick = startGPS;
-    document.getElementById('stopBtn').onclick = stopGPS;
-    document.getElementById('resetBtn').onclick = resetGPS;
+    startBtn.onclick = startGPS;
+    stopBtn.onclick = stopGPS;
+    resetBtn.onclick = resetGPS;
 
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
@@ -457,6 +514,7 @@
       }
     });
 
+    // ===== COMPASS =====
     const needleEl = document.getElementById('needle');
     const headingDegEl = document.getElementById('headingDeg');
     const headingDirEl = document.getElementById('headingDir');
@@ -513,6 +571,7 @@
       }
     }
 
+    // ===== TWITCH CHAT =====
     const chatEl = document.getElementById("chat");
     const chatStatusEl = document.getElementById("chatStatus");
 
