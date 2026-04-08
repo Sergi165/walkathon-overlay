@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Overlay Control (Easy Move)</title>
+  <title>Overlay Control</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 16px; }
     input, button, select { font-size: 14px; padding: 8px; }
@@ -12,7 +12,6 @@
     .small { color:#666; font-size:12px; }
     label { font-size:12px; color:#333; display:flex; flex-direction:column; gap:4px; }
 
-    /* 16:9 viewport */
     #viewport {
       width: 100%;
       max-width: 1200px;
@@ -25,7 +24,6 @@
       overflow: hidden;
     }
 
-    /* 1920x1080 stage scaled into viewport */
     #stage {
       width: 1920px;
       height: 1080px;
@@ -46,13 +44,17 @@
       touch-action: none;
       will-change: transform, opacity;
       border: none;
+
+      /* запрет стандартного drag-призрака */
+      -webkit-user-drag: none;
+      user-drag: none;
     }
     .item:active { cursor: grabbing; }
+    .item, .item * { -webkit-user-drag: none; user-drag: none; }
 
     .item.selected { outline: 2px solid rgba(124,58,237,.95); outline-offset: 2px; }
     .item.lowOpacity { outline: 2px dashed rgba(255,255,255,.35); outline-offset: 2px; }
 
-    /* YouTube container: drag the box, iframe does not capture mouse */
     .ytBox{
       background: rgba(255,255,255,.06);
       border: 1px solid rgba(255,255,255,.12);
@@ -69,7 +71,6 @@
       pointer-events: none;
     }
 
-    /* helper */
     .hint {
       padding: 8px 10px;
       border-radius: 10px;
@@ -94,8 +95,11 @@
   <h2>Overlay Control</h2>
 
   <div class="card hint">
-    <b>Удобное управление:</b><br>
-    net
+    <b>Управление:</b><br>
+    1) Клик по элементу — выделить.<br>
+    2) Перетаскивай сам элемент — двигается.<br>
+    3) “Тащить душу”: выдели элемент → зажми мышь на пустом месте сцены и тяни — двигается выбранный.<br>
+    4) Стрелки: 1px, <kbd>Shift</kbd>+стрелки: 10px.
   </div>
 
   <div class="card">
@@ -140,7 +144,7 @@
 
   <div class="card">
     <b>Поле (перетаскивание):</b>
-    <div class="small">Превью.</div>
+    <div class="small">Превью 16:9, внутри 1920×1080.</div>
     <div id="viewport"><div id="stage"></div></div>
   </div>
 
@@ -190,7 +194,7 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
-    const VW = 1920, VH = 1080;
+    const VW = 1920;
     const PREVIEW_MIN_OPACITY = 0.18;
 
     const app = initializeApp(firebaseConfig);
@@ -201,7 +205,11 @@
     const viewport = $("viewport");
     const stage = $("stage");
 
-    // overlayId from query ?id=
+    // Отключаем стандартный HTML5 drag глобально (чтобы не было “хрени”)
+    stage.addEventListener("dragstart", (e) => e.preventDefault());
+    viewport.addEventListener("dragstart", (e) => e.preventDefault());
+
+    // overlayId from query
     const qsId = new URLSearchParams(location.search).get("id") || "default";
     $("overlayId").value = qsId;
 
@@ -231,7 +239,7 @@
     applyStageScale();
     addEventListener("resize", applyStageScale);
 
-    // Selection
+    // Data/UI state
     let selectedId = null;
     let itemsCache = {};
     const els = new Map();
@@ -268,6 +276,8 @@
 
     async function patchSelected(patch) {
       if (!selectedId) return;
+      // локально тоже обновим, чтобы стрелки/таскание работали плавно
+      itemsCache[selectedId] = { ...(itemsCache[selectedId] || {}), ...patch };
       await update(ref(db, `${basePath()}/${selectedId}`), patch);
     }
 
@@ -315,12 +325,16 @@
       return null;
     }
 
-    async function addItem(kind, url, layer, x = 80, y = 80) {
+    function ytSrc(id){
+      const vid = encodeURIComponent(id || "");
+      return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${vid}`;
+    }
+
+    async function addItem(kind, url, layer) {
       const id = "it_" + Math.random().toString(16).slice(2);
       const base = {
         layer: layer === "back" ? "back" : "front",
-        x: Math.round(x),
-        y: Math.round(y),
+        x: 80, y: 80,
         scale: 1,
         rotate: 0,
         opacity: 1,
@@ -358,30 +372,30 @@
       bind();
     });
 
-    // Create DOM element for item
     function makeEl(it){
       if (it.type === "yt") {
         const box = document.createElement("div");
         box.className = "item ytBox";
         box.style.position = "absolute";
+        box.draggable = false;
+        box.addEventListener("dragstart", (e) => e.preventDefault());
 
         const f = document.createElement("iframe");
         f.allow = "autoplay; encrypted-media";
         f.frameBorder = "0";
         f.style.width = "100%";
         f.style.height = "100%";
-        f.style.pointerEvents = "none"; // IMPORTANT
+        f.style.pointerEvents = "none"; // чтобы iframe не ломал drag
         box.appendChild(f);
+
         return box;
       }
+
       const img = document.createElement("img");
       img.className = "item";
+      img.draggable = false;
+      img.addEventListener("dragstart", (e) => e.preventDefault());
       return img;
-    }
-
-    function ytSrc(id){
-      const vid = encodeURIComponent(id || "");
-      return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${vid}`;
     }
 
     function setPreviewStyle(el, it, isSelected) {
@@ -410,7 +424,23 @@
       el.classList.toggle("selected", isSelected);
     }
 
-    // Drag directly on item + select on click
+    function applyPreviewMove(id, x, y) {
+      const it = itemsCache[id] || {};
+      const s = Number(it.scale ?? 1);
+      const r = Number(it.rotate ?? 0);
+      const o = Number(it.opacity ?? 1);
+
+      const el = els.get(id);
+      if (!el) return;
+
+      el.style.opacity = String(Math.max(o, PREVIEW_MIN_OPACITY));
+      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
+    }
+
+    function setLocalXY(id, x, y) {
+      itemsCache[id] = { ...(itemsCache[id] || {}), x, y };
+    }
+
     function attachItemDrag(el, id){
       let drag = null;
 
@@ -438,13 +468,7 @@
         const nx = Math.round(drag.bx + drag.dx);
         const ny = Math.round(drag.by + drag.dy);
 
-        const cur = itemsCache[id] || {};
-        const s = Number(cur.scale ?? 1);
-        const r = Number(cur.rotate ?? 0);
-        const o = Number(cur.opacity ?? 1);
-
-        el.style.opacity = String(Math.max(o, PREVIEW_MIN_OPACITY));
-        el.style.transform = `translate(${nx}px, ${ny}px) scale(${s}) rotate(${r}deg)`;
+        applyPreviewMove(id, nx, ny);
       });
 
       el.addEventListener("pointerup", async () => {
@@ -452,6 +476,8 @@
         const nx = Math.round(drag.bx + drag.dx);
         const ny = Math.round(drag.by + drag.dy);
         drag = null;
+
+        setLocalXY(id, nx, ny);
         await update(ref(db, `${basePath()}/${id}`), { x: nx, y: ny });
       });
     }
@@ -470,10 +496,9 @@
         attachItemDrag(el, id);
       }
 
-      // update content
       if (wantType === "yt") {
-        const src = ytSrc(it.ytId || "");
         const iframe = el.querySelector("iframe");
+        const src = ytSrc(it.ytId || "");
         if (iframe && iframe.src !== src) iframe.src = src;
       } else {
         el.src = it.url || "";
@@ -493,21 +518,7 @@
     // ===== "Soul drag": move selected by dragging empty space =====
     let stageDrag = null;
 
-    function applyPreviewMove(id, x, y) {
-      const it = itemsCache[id] || {};
-      const s = Number(it.scale ?? 1);
-      const r = Number(it.rotate ?? 0);
-      const o = Number(it.opacity ?? 1);
-
-      const el = els.get(id);
-      if (!el) return;
-
-      el.style.opacity = String(Math.max(o, PREVIEW_MIN_OPACITY));
-      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
-    }
-
     stage.addEventListener("pointerdown", (e) => {
-      // если клик по самому элементу — работает обычный drag элемента
       if (e.target.closest && e.target.closest(".item")) return;
       if (!selectedId) return;
 
@@ -528,11 +539,13 @@
 
     stage.addEventListener("pointermove", (e) => {
       if (!stageDrag) return;
+
       stageDrag.dx = (e.clientX - stageDrag.sx) / stageDrag.scale;
       stageDrag.dy = (e.clientY - stageDrag.sy) / stageDrag.scale;
 
       const nx = Math.round(stageDrag.bx + stageDrag.dx);
       const ny = Math.round(stageDrag.by + stageDrag.dy);
+
       applyPreviewMove(stageDrag.id, nx, ny);
     });
 
@@ -543,10 +556,12 @@
 
       const nx = Math.round(bx + dx);
       const ny = Math.round(by + dy);
+
+      setLocalXY(id, nx, ny);
       await update(ref(db, `${basePath()}/${id}`), { x: nx, y: ny });
     });
 
-    // ===== Arrow keys nudge =====
+    // ===== Arrow nudge =====
     window.addEventListener("keydown", async (e) => {
       if (!selectedId) return;
 
@@ -566,33 +581,8 @@
       const ny = Math.round(Number(cur.y ?? 0) + dy);
 
       applyPreviewMove(selectedId, nx, ny);
+      setLocalXY(selectedId, nx, ny);
       await update(ref(db, `${basePath()}/${selectedId}`), { x: nx, y: ny });
-    });
-
-    // ===== Drag&Drop URL into viewport =====
-    viewport.addEventListener("dragover", (e) => e.preventDefault());
-
-    viewport.addEventListener("drop", async (e) => {
-      e.preventDefault();
-      const url =
-        e.dataTransfer.getData("text/uri-list") ||
-        e.dataTransfer.getData("text/plain");
-
-      if (!url) return;
-
-      const isYT = /youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\//i.test(url);
-
-      // add at drop position
-      const rect = viewport.getBoundingClientRect();
-      const scale = getScale();
-      const x = (e.clientX - rect.left) / scale;
-      const y = (e.clientY - rect.top) / scale;
-
-      try {
-        await addItem(isYT ? "yt" : "img", url.trim(), $("newLayer").value, x, y);
-      } catch (err) {
-        alert(err.message || err);
-      }
     });
 
     // ===== Bind Firebase =====
