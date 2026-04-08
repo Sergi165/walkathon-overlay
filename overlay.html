@@ -15,23 +15,26 @@
       color: #fff;
     }
 
-    /* ====== IMAGE LAYERS ====== */
+    /* ====== FRIEND IMAGES LAYERS ====== */
     .imgLayer{
       position: absolute;
       inset: 0;
       pointer-events: none;
       overflow: hidden;
     }
-    /* back layer is earlier in DOM -> behind HUD by default */
-    /* front layer is later in DOM -> above HUD */
+    #imgBack { z-index: 1; }
+    #hudWrap { z-index: 10; position: absolute; inset: 0; }
+    #imgFront { z-index: 20; }
+
     .ovItem{
-      position: absolute;
-      left: 0;
-      top: 0;
-      transform-origin: top left;
+      position:absolute;
+      left:0;
+      top:0;
+      transform-origin:center center; /* вращение вокруг центра */
       will-change: transform, opacity;
     }
 
+    /* ====== YOUR HUD ====== */
     .clockbox {
       position: absolute;
       left: 18px;
@@ -163,45 +166,48 @@
   </style>
 </head>
 <body>
-  <!-- BACK images (behind HUD) -->
+  <!-- Images behind HUD -->
   <div class="imgLayer" id="imgBack"></div>
 
-  <div class="clockbox">
-    <div class="city" id="city">LOADING LOCATION...</div>
+  <!-- HUD wrapper -->
+  <div id="hudWrap">
+    <div class="clockbox">
+      <div class="city" id="city">LOADING LOCATION...</div>
 
-    <div class="clockrow">
-      <div class="clock" id="clock">00:00:00</div>
+      <div class="clockrow">
+        <div class="clock" id="clock">00:00:00</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="weatherrow">
+        <div class="temp" id="temp">--°C</div>
+        <div class="date" id="date">---</div>
+      </div>
     </div>
 
-    <div class="divider"></div>
+    <div class="hud">
+      <div class="topline">
+        <div class="done" id="done">0m</div>
+        <div class="goal" id="goal">GOAL: 10km</div>
+      </div>
 
-    <div class="weatherrow">
-      <div class="temp" id="temp">--°C</div>
-      <div class="date" id="date">---</div>
+      <div class="left" id="left">LEFT: 10000m</div>
+
+      <div class="sub">
+        <span id="walked">WALKED: 0m</span>
+        <span id="status">GPS: idle</span>
+      </div>
+
+      <div class="bar">
+        <div class="fill" id="fill"></div>
+      </div>
+
+      <div class="pct" id="pct">0.0%</div>
     </div>
   </div>
 
-  <div class="hud">
-    <div class="topline">
-      <div class="done" id="done">0m</div>
-      <div class="goal" id="goal">GOAL: 10km</div>
-    </div>
-
-    <div class="left" id="left">LEFT: 10000m</div>
-
-    <div class="sub">
-      <span id="walked">WALKED: 0m</span>
-      <span id="status">GPS: idle</span>
-    </div>
-
-    <div class="bar">
-      <div class="fill" id="fill"></div>
-    </div>
-
-    <div class="pct" id="pct">0.0%</div>
-  </div>
-
-  <!-- FRONT images (above HUD) -->
+  <!-- Images above HUD -->
   <div class="imgLayer" id="imgFront"></div>
 
   <script type="module">
@@ -244,20 +250,14 @@
 
     function updateClock() {
       const now = new Date();
-
       const h = String(now.getHours()).padStart(2, '0');
       const m = String(now.getMinutes()).padStart(2, '0');
       const s = String(now.getSeconds()).padStart(2, '0');
-
       clockEl.textContent = `${h}:${m}:${s}`;
 
       const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-      dateEl.textContent =
-        weekdays[now.getDay()] + ', ' +
-        now.getDate() + ' ' +
-        months[now.getMonth()];
+      dateEl.textContent = weekdays[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()];
     }
 
     updateClock();
@@ -267,7 +267,6 @@
       try {
         const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
         const now = Date.now();
-
         if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) return;
 
         lastWeatherKey = roundedKey;
@@ -277,8 +276,7 @@
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m`
         );
         const weatherData = await weatherRes.json();
-
-        if (weatherData && weatherData.current && typeof weatherData.current.temperature_2m !== 'undefined') {
+        if (weatherData?.current && typeof weatherData.current.temperature_2m !== 'undefined') {
           tempEl.textContent = Math.round(weatherData.current.temperature_2m) + '°C';
         }
 
@@ -288,7 +286,7 @@
         );
         const geoData = await geoRes.json();
 
-        if (geoData && geoData.address) {
+        if (geoData?.address) {
           const city =
             geoData.address.city ||
             geoData.address.town ||
@@ -307,9 +305,8 @@
       }
     }
 
-    // ====== MAIN STATE ======
+    // ===== Walkathon state =====
     const stateRef = ref(db, 'walkathon/state');
-
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       const distance = Number(s.distanceMeters || 0);
@@ -332,7 +329,7 @@
       }
     });
 
-    // ====== FRIEND-CONTROLLED IMAGES ======
+    // ===== Friend-controlled images =====
     const overlayId = new URLSearchParams(location.search).get("id") || "default";
     const imgBack = document.getElementById("imgBack");
     const imgFront = document.getElementById("imgFront");
@@ -340,23 +337,21 @@
     const itemsRef = ref(db, `walkathon/overlays/${overlayId}/items`);
     const itemEls = new Map();
 
-    function getLayerEl(layer) {
-      return (layer === "back") ? imgBack : imgFront; // default front
+    function layerParent(layer) {
+      return (layer === "back") ? imgBack : imgFront;
     }
 
     function upsertItem(id, it) {
       let el = itemEls.get(id);
-      const layer = it.layer === "back" ? "back" : "front";
-      const parent = getLayerEl(layer);
+      const parent = layerParent(it.layer === "back" ? "back" : "front");
 
       if (!el) {
         el = document.createElement("img");
         el.className = "ovItem";
         itemEls.set(id, el);
         parent.appendChild(el);
-      } else {
-        // if layer changed, move element
-        if (el.parentElement !== parent) parent.appendChild(el);
+      } else if (el.parentElement !== parent) {
+        parent.appendChild(el);
       }
 
       el.src = it.url || "";
@@ -366,12 +361,11 @@
       const s = Number(it.scale ?? 1);
       const r = Number(it.rotate ?? 0);
       const o = Number(it.opacity ?? 1);
-
       const hidden = it.hidden === true;
-      el.style.display = hidden ? "none" : "block";
 
-      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
+      el.style.display = hidden ? "none" : "block";
       el.style.opacity = String(o);
+      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
     }
 
     function pruneItems(alive) {
