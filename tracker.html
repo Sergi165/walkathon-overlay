@@ -21,209 +21,70 @@
       --line:#2a2f3a;
       --white:#fff;
     }
-
     * { box-sizing: border-box; }
 
-    html, body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--white);
-      font-family: Arial, sans-serif;
-    }
+    html, body { margin: 0; background: var(--bg); color: var(--white); font-family: Arial, sans-serif; }
+    .wrap { padding: 12px; display: grid; gap: 12px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+    .sticky-preview { position: sticky; top: 12px; z-index: 50; }
 
-    .wrap {
-      padding: 12px;
-      display: grid;
-      gap: 12px;
-    }
+    .title { font-size: 13px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
+    .big { font-size: 34px; font-weight: 700; color: var(--green); line-height: 1.1; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px;
-    }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+    .stat .k { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .stat .v { font-size: 18px; font-weight: 700; }
 
-    .sticky-preview {
-      position: sticky;
-      top: 12px;
-      z-index: 50;
-    }
+    .bar { margin-top: 10px; height: 18px; background: rgba(255,255,255,.08); border-radius: 999px; overflow: hidden; }
+    .fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--green), var(--green2)); transition: width .35s ease; }
 
-    .title {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-    }
-
-    .big {
-      font-size: 34px;
-      font-weight: 700;
-      color: var(--green);
-      line-height: 1.1;
-    }
-
-    .row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .meta {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .stat {
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px;
-    }
-
-    .stat .k {
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 4px;
-    }
-
-    .stat .v {
-      font-size: 18px;
-      font-weight: 700;
-    }
-
-    .bar {
-      margin-top: 10px;
-      height: 18px;
-      background: rgba(255,255,255,.08);
-      border-radius: 999px;
-      overflow: hidden;
-    }
-
-    .fill {
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, var(--green), var(--green2));
-      transition: width .35s ease;
-    }
-
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 12px 14px;
-      color: white;
-      font-weight: 700;
-      background: #252a35;
-      cursor: pointer;
-    }
-
+    button { border: 0; border-radius: 10px; padding: 12px 14px; color: white; font-weight: 700; background: #252a35; cursor: pointer; }
     button.primary { background: #1f6feb; }
     button.danger { background: #d73a49; }
     button.ok { background: #238636; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
 
-    .compass {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
+    .compass { display: flex; align-items: center; gap: 12px; }
     .rose {
-      width: 86px;
-      height: 86px;
-      border-radius: 50%;
-      border: 2px solid var(--line);
-      position: relative;
+      width: 86px; height: 86px; border-radius: 50%;
+      border: 2px solid var(--line); position: relative;
       background: radial-gradient(circle at center, #1c2130, #11151d);
       flex: 0 0 auto;
     }
-
     .needle {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 4px;
-      height: 34px;
+      position: absolute; left: 50%; top: 50%;
+      width: 4px; height: 34px;
       background: linear-gradient(180deg, #ff4d4d, #fff);
       transform-origin: center 26px;
       transform: translate(-50%, -100%) rotate(0deg);
       border-radius: 4px;
     }
-
-    .rose .n, .rose .e, .rose .s, .rose .w {
-      position: absolute;
-      font-size: 12px;
-      color: var(--muted);
-      font-weight: 700;
-    }
-
+    .rose .n, .rose .e, .rose .s, .rose .w { position: absolute; font-size: 12px; color: var(--muted); font-weight: 700; }
     .rose .n { left: 50%; top: 4px; transform: translateX(-50%); color: #ff7b7b; }
     .rose .s { left: 50%; bottom: 4px; transform: translateX(-50%); }
     .rose .e { right: 6px; top: 50%; transform: translateY(-50%); }
     .rose .w { left: 6px; top: 50%; transform: translateY(-50%); }
 
-    .muted {
-      color: var(--muted);
-      font-size: 13px;
-    }
+    .muted { color: var(--muted); font-size: 13px; }
+    .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 
-    .chat-status {
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 8px;
-    }
-
-    #chat {
-      display: flex;
-      flex-direction: column-reverse;
-      gap: 6px;
-      max-height: 420px;
-      overflow: hidden;
-    }
-
+    #chat { display: flex; flex-direction: column-reverse; gap: 6px; max-height: 420px; overflow: hidden; }
     .message {
-      padding: 6px 8px;
-      border-radius: 8px;
+      padding: 6px 8px; border-radius: 8px;
       background: rgba(255,255,255,.05);
-      color: #fff;
-      font-size: 16px;
-      line-height: 1.3;
-      opacity: 0;
-      animation: fadeIn 0.2s forwards;
-      max-width: 100%;
-      word-wrap: break-word;
+      color: #fff; font-size: 16px; line-height: 1.3;
+      opacity: 0; animation: fadeIn 0.2s forwards;
+      max-width: 100%; word-wrap: break-word;
     }
+    .message.fade-out { animation: fadeOut 0.4s forwards; }
+    .username { font-weight: 700; margin-right: 6px; }
 
-    .message.fade-out {
-      animation: fadeOut 0.4s forwards;
-    }
+    .stream-preview { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 12px; background: #000; }
 
-    .username {
-      font-weight: 700;
-      margin-right: 6px;
-    }
-
-    .stream-preview {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border: 0;
-      border-radius: 12px;
-      background: #000;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes fadeOut {
-      from { opacity: 1; transform: translateY(0); }
-      to   { opacity: 0; transform: translateY(-6px); }
-    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
   </style>
 </head>
 <body>
@@ -240,14 +101,13 @@
     <div class="card">
       <div class="title">Walkathon Tracker</div>
       <div class="big" id="done">0m</div>
-      <div class="muted" id="left">LEFT: 10000m</div>
-
+      <div class="muted" id="left">LEFT: 0m</div>
       <div class="bar"><div class="fill" id="fill"></div></div>
 
       <div class="meta" style="margin-top:10px">
         <div class="stat">
           <div class="k">Status</div>
-          <div class="v" id="status">idle</div>
+          <div class="v" id="status">auth...</div>
         </div>
         <div class="stat">
           <div class="k">Accuracy</div>
@@ -264,10 +124,11 @@
       </div>
 
       <div class="row" style="margin-top:12px">
-        <button class="primary" id="startBtn">Start GPS</button>
-        <button class="ok" id="stopBtn">Stop</button>
-        <button class="danger" id="resetBtn">Reset</button>
+        <button class="primary" id="startBtn" disabled>Start GPS</button>
+        <button class="ok" id="stopBtn" disabled>Stop</button>
+        <button class="danger" id="resetBtn" disabled>Reset</button>
       </div>
+
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
     </div>
 
@@ -276,10 +137,7 @@
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
-          <div class="n">N</div>
-          <div class="e">E</div>
-          <div class="s">S</div>
-          <div class="w">W</div>
+          <div class="n">N</div><div class="e">E</div><div class="s">S</div><div class="w">W</div>
         </div>
         <div>
           <div class="big" id="headingDeg">0°</div>
@@ -297,7 +155,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, set, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
@@ -310,48 +168,38 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    const auth = getAuth(app);
-
-    const stateRef = ref(db, 'walkathon/state');
-
-    const GOAL_METERS = 25000;
+    const DEFAULT_GOAL_METERS = 25000;
     const MIN_ACCURACY = 35;
     const MIN_STEP_METERS = 5;
     const MAX_STEP_METERS = 120;
 
-    const doneEl = document.getElementById('done');
-    const leftEl = document.getElementById('left');
-    const fillEl = document.getElementById('fill');
-    const statusEl = document.getElementById('status');
-    const accEl = document.getElementById('acc');
-    const speedEl = document.getElementById('speed');
-    const authInfoEl = document.getElementById('authInfo');
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+    const stateRef = ref(db, "walkathon/state");
 
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const resetBtn = document.getElementById('resetBtn');
+    const doneEl = document.getElementById("done");
+    const leftEl = document.getElementById("left");
+    const fillEl = document.getElementById("fill");
+    const statusEl = document.getElementById("status");
+    const accEl = document.getElementById("acc");
+    const speedEl = document.getElementById("speed");
+    const authInfoEl = document.getElementById("authInfo");
 
-    let watchId = null;
-    let lastPoint = null;
-    let distanceMeters = 0;
-
-    function fmtMeters(m) {
-      if (m >= 1000) return (m / 1000).toFixed(2) + 'km';
-      return Math.round(m) + 'm';
-    }
-
-    function setBtnsEnabled(v){
-      startBtn.disabled = !v;
-      stopBtn.disabled = !v;
-      resetBtn.disabled = !v;
-    }
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn  = document.getElementById("stopBtn");
+    const resetBtn = document.getElementById("resetBtn");
 
     let authed = false;
 
-    async function ensureAuth() {
+    function setBtnsEnabled(v){
+      startBtn.disabled = !v;
+      stopBtn.disabled  = !v;
+      resetBtn.disabled = !v;
+    }
+    setBtnsEnabled(false);
+
+    async function ensureAuth(){
       if (auth.currentUser) return;
       await signInAnonymously(auth);
     }
@@ -359,32 +207,40 @@
     onAuthStateChanged(auth, (user) => {
       authed = !!user;
       setBtnsEnabled(authed);
-      authInfoEl.textContent = user ? "Auth: anonymous OK" : "Auth: ...";
-      if (user && statusEl.textContent === "auth...") statusEl.textContent = "idle";
+      authInfoEl.textContent = authed ? "Auth: anonymous OK" : "Auth: ...";
+      if (authed && statusEl.textContent === "auth...") statusEl.textContent = "idle";
     });
 
-    // стартуем авторизацию сразу
-    setBtnsEnabled(false);
     statusEl.textContent = "auth...";
     authInfoEl.textContent = "Auth: signing in...";
-    ensureAuth().catch((e) => {
-      console.log("Anonymous auth error:", e);
+    ensureAuth().catch((e)=>{
+      console.log("Auth error", e);
       authInfoEl.textContent = "Auth: error (enable Anonymous in Firebase)";
       statusEl.textContent = "auth error";
     });
 
+    // ВСЕГДА В МЕТРАХ
+    function fmtMeters(m) {
+      return Math.round(Number(m || 0)) + "m";
+    }
+
+    let watchId = null;
+    let lastPoint = null;
+    let distanceMeters = 0;
+    let goalMeters = DEFAULT_GOAL_METERS;
+
     function updateUI(extra = {}) {
-      const left = Math.max(GOAL_METERS - distanceMeters, 0);
-      const percent = Math.min((distanceMeters / GOAL_METERS) * 100, 100);
+      const left = Math.max(goalMeters - distanceMeters, 0);
+      const percent = goalMeters > 0 ? Math.min((distanceMeters / goalMeters) * 100, 100) : 0;
 
       doneEl.textContent = fmtMeters(distanceMeters);
-      leftEl.textContent = 'LEFT: ' + fmtMeters(left);
-      fillEl.style.width = percent + '%';
+      leftEl.textContent = "LEFT: " + fmtMeters(left);
+      fillEl.style.width = percent + "%";
 
       if (extra.status) statusEl.textContent = extra.status;
-      if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + 'm';
+      if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + "m";
       if (extra.speed != null && !Number.isNaN(extra.speed)) {
-        speedEl.textContent = (extra.speed * 3.6).toFixed(1) + ' km/h';
+        speedEl.textContent = (extra.speed * 3.6).toFixed(1) + " km/h";
       }
     }
 
@@ -400,44 +256,40 @@
       return 2 * R * Math.asin(Math.sqrt(a));
     }
 
+    // Пишем только distance/status/gps (не трогаем goal/follows)
     async function pushState(status, extra = {}) {
       try {
         if (!authed) await ensureAuth();
-
         await update(stateRef, {
           distanceMeters: Math.round(distanceMeters),
-          goalMeters: GOAL_METERS,
-          leftMeters: Math.max(GOAL_METERS - Math.round(distanceMeters), 0),
           status,
           updatedAt: Date.now(),
           ...extra
         });
       } catch (e) {
-        console.log("pushState error:", e);
+        console.log("pushState error", e);
         statusEl.textContent = "db denied";
       }
     }
 
     async function startGPS() {
-      try {
-        if (!authed) await ensureAuth();
-      } catch {}
+      try { if (!authed) await ensureAuth(); } catch {}
       if (!authed) return;
 
-      if (!('geolocation' in navigator)) {
-        alert('Geolocation не поддерживается');
+      if (!("geolocation" in navigator)) {
+        alert("Geolocation не поддерживается");
         return;
       }
       if (watchId != null) return;
 
-      statusEl.textContent = 'starting';
+      statusEl.textContent = "starting";
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
         const { latitude, longitude, accuracy, speed } = pos.coords;
 
         if (accuracy && accuracy > MIN_ACCURACY) {
-          updateUI({ status: 'weak gps', acc: accuracy, speed });
-          await pushState('weak gps', { accuracy, latitude, longitude, speed: speed ?? 0 });
+          updateUI({ status: "weak gps", acc: accuracy, speed });
+          await pushState("weak gps", { accuracy, latitude, longitude, speed: speed ?? 0 });
           return;
         }
 
@@ -451,16 +303,17 @@
         }
 
         lastPoint = point;
-        updateUI({ status: 'tracking', acc: accuracy, speed });
-        await pushState('tracking', {
+
+        updateUI({ status: "tracking", acc: accuracy, speed });
+        await pushState("tracking", {
           accuracy,
           speed: speed ?? 0,
           latitude,
           longitude
         });
       }, async (err) => {
-        statusEl.textContent = 'gps error';
-        await pushState('gps error', { error: err.message || 'unknown' });
+        statusEl.textContent = "gps error";
+        await pushState("gps error", { error: err.message || "unknown" });
       }, {
         enableHighAccuracy: true,
         maximumAge: 1000,
@@ -473,79 +326,67 @@
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
-      await pushState('stopped');
-      statusEl.textContent = 'stopped';
+      await pushState("stopped");
+      statusEl.textContent = "stopped";
     }
 
     async function resetGPS() {
-      if (!confirm('Сбросить дистанцию?')) return;
+      if (!confirm("Сбросить дистанцию?")) return;
       distanceMeters = 0;
       lastPoint = null;
-      updateUI({ status: 'reset', acc: null, speed: null });
+      updateUI({ status: "reset", acc: null, speed: null });
 
       try {
         if (!authed) await ensureAuth();
-        await set(stateRef, {
+        await update(stateRef, {
           distanceMeters: 0,
-          goalMeters: GOAL_METERS,
-          leftMeters: GOAL_METERS,
-          status: 'reset',
+          status: "reset",
           updatedAt: Date.now()
         });
       } catch (e) {
-        console.log("resetGPS error:", e);
+        console.log("resetGPS error", e);
         statusEl.textContent = "db denied";
       }
     }
 
     startBtn.onclick = startGPS;
-    stopBtn.onclick = stopGPS;
+    stopBtn.onclick  = stopGPS;
     resetBtn.onclick = resetGPS;
 
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
-      if (typeof s.distanceMeters === 'number') {
-        distanceMeters = Number(s.distanceMeters || 0);
-        updateUI({
-          status: s.status || 'idle',
-          acc: s.accuracy ?? null,
-          speed: s.speed ?? null
-        });
-      }
+      goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
+      if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
+
+      updateUI({
+        status: s.status || "idle",
+        acc: s.accuracy ?? null,
+        speed: s.speed ?? null
+      });
     });
 
     // ===== COMPASS =====
-    const needleEl = document.getElementById('needle');
-    const headingDegEl = document.getElementById('headingDeg');
-    const headingDirEl = document.getElementById('headingDir');
-    const headingTextEl = document.getElementById('headingText');
+    const needleEl = document.getElementById("needle");
+    const headingDegEl = document.getElementById("headingDeg");
+    const headingDirEl = document.getElementById("headingDir");
+    const headingTextEl = document.getElementById("headingText");
 
     function degToDir(deg) {
-      const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+      const dirs = ["N","NE","E","SE","S","SW","W","NW"];
       return dirs[Math.round(deg / 45) % 8];
     }
-
     let smoothHeading = 0;
     let hasHeading = false;
 
-    function angleDelta(a, b) {
-      return (b - a + 540) % 360 - 180;
-    }
+    function angleDelta(a, b) { return (b - a + 540) % 360 - 180; }
 
     function setHeading(deg) {
       const target = ((deg % 360) + 360) % 360;
-
-      if (!hasHeading) {
-        smoothHeading = target;
-        hasHeading = true;
-      } else {
-        const d = angleDelta(smoothHeading, target);
-        if (Math.abs(d) < 1) return;
-        smoothHeading = (smoothHeading + d * 0.15 + 360) % 360;
-      }
+      if (!hasHeading) { smoothHeading = target; hasHeading = true; }
+      else { const d = angleDelta(smoothHeading, target); smoothHeading = (smoothHeading + d * 0.15 + 360) % 360; }
 
       needleEl.style.transform = `translate(-50%, -100%) rotate(${smoothHeading}deg)`;
-      headingDegEl.textContent = Math.round(smoothHeading) + '°';
+      headingDegEl.textContent = Math.round(smoothHeading) + "°";
       const dir = degToDir(smoothHeading);
       headingDirEl.textContent = dir;
       headingTextEl.textContent = dir;
@@ -553,31 +394,28 @@
 
     async function initCompass() {
       try {
-        if (typeof DeviceOrientationEvent !== 'undefined' &&
-            typeof DeviceOrientationEvent.requestPermission === 'function') {
+        if (typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function") {
           const res = await DeviceOrientationEvent.requestPermission();
-          if (res !== 'granted') return;
+          if (res !== "granted") return;
         }
 
-        window.addEventListener('deviceorientationabsolute', (e) => {
-          if (typeof e.alpha === 'number') setHeading(e.alpha);
+        window.addEventListener("deviceorientationabsolute", (e) => {
+          if (typeof e.alpha === "number") setHeading(e.alpha);
         }, true);
 
-        window.addEventListener('deviceorientation', (e) => {
-          if (typeof e.alpha === 'number') setHeading(e.alpha);
+        window.addEventListener("deviceorientation", (e) => {
+          if (typeof e.alpha === "number") setHeading(e.alpha);
         }, true);
       } catch (e) {
-        console.log('Compass init error', e);
+        console.log("Compass init error", e);
       }
     }
 
     // ===== TWITCH CHAT =====
     const chatEl = document.getElementById("chat");
     const chatStatusEl = document.getElementById("chatStatus");
-
-    function setChatStatus(text) {
-      chatStatusEl.textContent = text;
-    }
+    function setChatStatus(text) { chatStatusEl.textContent = text; }
 
     function addMessage(username, text, color) {
       const msg = document.createElement("div");
@@ -594,10 +432,7 @@
       msg.appendChild(textSpan);
 
       chatEl.prepend(msg);
-
-      while (chatEl.children.length > MAX_MESSAGES) {
-        chatEl.lastChild.remove();
-      }
+      while (chatEl.children.length > MAX_MESSAGES) chatEl.lastChild.remove();
 
       setTimeout(() => {
         msg.classList.add("fade-out");
@@ -606,19 +441,14 @@
     }
 
     let ws;
-
     function connectTwitch() {
-      if (!CHANNEL_NAME) {
-        setChatStatus("channel not set");
-        return;
-      }
+      if (!CHANNEL_NAME) { setChatStatus("channel not set"); return; }
 
       const nick = "justinfan" + Math.floor(Math.random() * 80000 + 1000);
       ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
 
       ws.addEventListener("open", () => {
         setChatStatus("connected");
-
         ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership\r\n");
         ws.send("NICK " + nick + "\r\n");
         ws.send("JOIN #" + CHANNEL_NAME.toLowerCase() + "\r\n");
@@ -628,25 +458,13 @@
         const lines = event.data.split("\r\n");
         for (const line of lines) {
           if (!line) continue;
-
-          if (line.startsWith("PING")) {
-            ws.send("PONG :tmi.twitch.tv\r\n");
-            continue;
-          }
-
+          if (line.startsWith("PING")) { ws.send("PONG :tmi.twitch.tv\r\n"); continue; }
           handleIrcLine(line);
         }
       });
 
-      ws.addEventListener("close", () => {
-        setChatStatus("reconnecting in 5s...");
-        setTimeout(connectTwitch, 5000);
-      });
-
-      ws.addEventListener("error", () => {
-        setChatStatus("socket error");
-        ws.close();
-      });
+      ws.addEventListener("close", () => { setChatStatus("reconnecting in 5s..."); setTimeout(connectTwitch, 5000); });
+      ws.addEventListener("error", () => { setChatStatus("socket error"); ws.close(); });
     }
 
     function handleIrcLine(line) {
@@ -657,11 +475,7 @@
         const spaceIdx = rest.indexOf(" ");
         const tagStr = rest.slice(1, spaceIdx);
         rest = rest.slice(spaceIdx + 1);
-
-        tagStr.split(";").forEach(part => {
-          const [k, v] = part.split("=");
-          tags[k] = v || "";
-        });
+        tagStr.split(";").forEach(part => { const [k, v] = part.split("="); tags[k] = v || ""; });
       }
 
       if (!rest.startsWith(":")) return;
@@ -681,13 +495,12 @@
         const text = params.slice(msgIdx + 2).slice(0, 350);
         const username = (tags["display-name"] || prefix.split("!")[0]) || "user";
         const color = tags["color"] || "#ffffff";
-
         addMessage(username, text, color);
       }
     }
 
     initCompass();
-    updateUI({ status: 'idle' });
+    updateUI({ status: "idle" });
     connectTwitch();
   </script>
 </body>
