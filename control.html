@@ -10,25 +10,53 @@
     .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
     .card { border:1px solid #ddd; padding:10px; border-radius:10px; margin:10px 0; }
     .small { color:#666; font-size:12px; }
+    label { font-size:12px; color:#333; display:flex; flex-direction:column; gap:4px; }
 
-    #canvas {
+    /* 16:9 viewport */
+    #viewport {
       width: 100%;
-      height: 60vh;
+      max-width: 1200px;
+      aspect-ratio: 16 / 9;
+      max-height: 60vh;
       border: 1px dashed #999;
+      border-radius: 10px;
+      background: #111;
       position: relative;
       overflow: hidden;
-      background: #111;
-      border-radius: 10px;
     }
-    .item {
-      position:absolute;
+
+    /* inside fixed 1920x1080 stage scaled to viewport */
+    #stage {
+      width: 1920px;
+      height: 1080px;
+      position: absolute;
+      left: 0;
+      top: 0;
       transform-origin: top left;
+    }
+
+    .item {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: center center;   /* вращение вокруг центра */
       cursor: move;
       user-select:none;
       -webkit-user-select:none;
       touch-action: none;
+      will-change: left, top, transform, opacity;
     }
-    label { font-size:12px; color:#333; display:flex; flex-direction:column; gap:4px; }
+
+    .item.selected {
+      outline: 2px solid rgba(124, 58, 237, .9);
+      outline-offset: 2px;
+    }
+
+    .item.lowOpacity {
+      outline: 2px dashed rgba(255,255,255,.35);
+      outline-offset: 2px;
+      filter: drop-shadow(0 0 6px rgba(255,255,255,.15));
+    }
   </style>
 </head>
 <body>
@@ -60,7 +88,7 @@
     <div class="row">
       <input id="imgUrl" style="flex:1" placeholder="Прямая ссылка на PNG/WebP (прозрачность ок)" />
       <select id="newLayer">
-        <option value="front">front (поверх всего)</option>
+        <option value="front">front (поверх HUD)</option>
         <option value="back">back (за HUD)</option>
       </select>
       <button id="addBtn">Add</button>
@@ -72,14 +100,17 @@
 
   <div class="card">
     <b>Поле (перетаскивание):</b>
-    <div class="small">Это предпросмотр. В OBS вставляешь overlay.html.</div>
-    <div id="canvas"></div>
+    <div class="small">Это предпросмотр в 16:9 (виртуально 1920×1080). В OBS вставляешь overlay.html.</div>
+    <div id="viewport">
+      <div id="stage"></div>
+    </div>
   </div>
 
   <div class="card">
     <b>Выбранный элемент:</b>
     <div class="row">
       <span class="small" id="sel">Ничего не выбрано</span>
+      <button id="resetBtn" disabled>Reset</button>
       <button id="delBtn" disabled>Delete</button>
       <button id="hideBtn" disabled>Hide/Show</button>
     </div>
@@ -121,14 +152,18 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
+    const VW = 1920;
+    const VH = 1080;
+
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
 
     const $ = (id) => document.getElementById(id);
-    const canvas = $("canvas");
+    const viewport = $("viewport");
+    const stage = $("stage");
 
-    // Overlay ID from query ?id=
+    // overlayId from query ?id=
     const qsId = new URLSearchParams(location.search).get("id") || "default";
     $("overlayId").value = qsId;
 
@@ -147,8 +182,8 @@
       $("loginBtn").disabled = !!user;
     });
 
-    // Selection UI enable/disable
     function setControlsEnabled(enabled) {
+      $("resetBtn").disabled = !enabled;
       $("delBtn").disabled = !enabled;
       $("hideBtn").disabled = !enabled;
       $("layerSel").disabled = !enabled;
@@ -161,8 +196,25 @@
     let itemsCache = {};
     const els = new Map();
 
+    function getScale() {
+      const rect = viewport.getBoundingClientRect();
+      // viewport is 16:9, so scale is uniform
+      return rect.width / VW;
+    }
+
+    function applyStageScale() {
+      const s = getScale();
+      stage.style.transform = `scale(${s})`;
+    }
+    applyStageScale();
+    addEventListener("resize", applyStageScale);
+
     function select(id) {
       selectedId = id;
+      for (const [iid, el] of els.entries()) {
+        el.classList.toggle("selected", iid === id);
+      }
+
       if (!id) {
         $("sel").textContent = "Ничего не выбрано";
         setControlsEnabled(false);
@@ -171,6 +223,7 @@
       const it = itemsCache[id];
       $("sel").textContent = `Selected: ${id}`;
       setControlsEnabled(true);
+
       $("layerSel").value = it.layer === "back" ? "back" : "front";
       $("op").value = it.opacity ?? 1;
       $("sc").value = it.scale ?? 1;
@@ -199,12 +252,32 @@
       await patchSelected({ hidden: !(it.hidden === true) });
     };
 
+    // Reset выбранной картинки к "норме"
+    $("resetBtn").onclick = async () => {
+      if (!selectedId) return;
+      await patchSelected({
+        x: 80,
+        y: 80,
+        scale: 1,
+        rotate: 0,
+        opacity: 1,
+        layer: "front",
+        hidden: false
+      });
+    };
+
     async function addImage(url, layer) {
       const id = "img_" + Math.random().toString(16).slice(2);
+
+      // По умолчанию ставим примерно в центр экрана
+      const defaultX = Math.round(VW / 2);
+      const defaultY = Math.round(VH / 2);
+
       await set(ref(db, `${basePath()}/${id}`), {
         url,
         layer: layer === "back" ? "back" : "front",
-        x: 80, y: 80,
+        x: defaultX,
+        y: defaultY,
         scale: 1,
         rotate: 0,
         opacity: 1,
@@ -224,6 +297,29 @@
       bind();
     });
 
+    function setPreviewStyle(el, it, isSelected) {
+      const x = Number(it.x ?? 0);
+      const y = Number(it.y ?? 0);
+      const s = Number(it.scale ?? 1);
+      const r = Number(it.rotate ?? 0);
+      const o = Number(it.opacity ?? 1);
+      const hidden = it.hidden === true;
+
+      // В control делаем минимум видимости, чтобы можно было найти элемент,
+      // даже если opacity=0 в стриме.
+      const PREVIEW_MIN_OPACITY = 0.18;
+      const previewOpacity = hidden ? 0 : Math.max(o, PREVIEW_MIN_OPACITY);
+
+      el.style.left = x + "px";
+      el.style.top  = y + "px";
+      el.style.opacity = String(previewOpacity);
+      el.style.display = hidden ? "none" : "block";
+      el.style.transform = `translate(-50%, -50%) scale(${s}) rotate(${r}deg)`;
+
+      el.classList.toggle("lowOpacity", !hidden && o < PREVIEW_MIN_OPACITY);
+      el.classList.toggle("selected", isSelected);
+    }
+
     function upsert(id, it) {
       let el = els.get(id);
       if (!el) {
@@ -231,36 +327,47 @@
         el.className = "item";
         el.draggable = false;
         els.set(id, el);
-        canvas.appendChild(el);
+        stage.appendChild(el);
 
-        // Drag logic
         let drag = null;
 
         el.addEventListener("pointerdown", (e) => {
           select(id);
           el.setPointerCapture(e.pointerId);
+
+          const scale = getScale();
+          const cur = itemsCache[id] || {};
           drag = {
             sx: e.clientX,
             sy: e.clientY,
-            bx: Number((itemsCache[id]?.x) ?? 0),
-            by: Number((itemsCache[id]?.y) ?? 0),
+            bx: Number(cur.x ?? 0),
+            by: Number(cur.y ?? 0),
             dx: 0,
-            dy: 0
+            dy: 0,
+            scale
           };
         });
 
         el.addEventListener("pointermove", (e) => {
           if (!drag) return;
-          drag.dx = e.clientX - drag.sx;
-          drag.dy = e.clientY - drag.sy;
+          // конвертируем движение мыши в координаты 1920x1080
+          drag.dx = (e.clientX - drag.sx) / drag.scale;
+          drag.dy = (e.clientY - drag.sy) / drag.scale;
+
           const nx = Math.round(drag.bx + drag.dx);
           const ny = Math.round(drag.by + drag.dy);
 
           const cur = itemsCache[id] || {};
           const s = Number(cur.scale ?? 1);
           const r = Number(cur.rotate ?? 0);
+          const o = Number(cur.opacity ?? 1);
 
-          el.style.transform = `translate(${nx}px, ${ny}px) scale(${s}) rotate(${r}deg)`;
+          el.style.left = nx + "px";
+          el.style.top  = ny + "px";
+          el.style.transform = `translate(-50%, -50%) scale(${s}) rotate(${r}deg)`;
+
+          const PREVIEW_MIN_OPACITY = 0.18;
+          el.style.opacity = String(Math.max(o, PREVIEW_MIN_OPACITY));
         });
 
         el.addEventListener("pointerup", async () => {
@@ -273,16 +380,7 @@
       }
 
       el.src = it.url || "";
-      const x = Number(it.x ?? 0);
-      const y = Number(it.y ?? 0);
-      const s = Number(it.scale ?? 1);
-      const r = Number(it.rotate ?? 0);
-      const o = Number(it.opacity ?? 1);
-      const hidden = it.hidden === true;
-
-      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
-      el.style.opacity = String(o);
-      el.style.display = hidden ? "none" : "block";
+      setPreviewStyle(el, it, id === selectedId);
     }
 
     function prune(items) {
@@ -296,9 +394,9 @@
       if (selectedId && !alive.has(selectedId)) select(null);
     }
 
-    let unsubBound = false;
+    let bound = false;
     function bind() {
-      canvas.innerHTML = "";
+      stage.innerHTML = "";
       els.clear();
       itemsCache = {};
       select(null);
@@ -311,10 +409,10 @@
         prune(items);
       });
 
-      unsubBound = true;
+      bound = true;
     }
 
-    if (!unsubBound) bind();
+    if (!bound) bind();
   </script>
 </body>
 </html>
