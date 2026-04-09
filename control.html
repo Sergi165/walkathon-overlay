@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Overlay Control (Snap like Overlay)</title>
+  <title>Overlay Control</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 16px; }
     input, button, select { font-size: 14px; padding: 8px; }
@@ -49,26 +49,23 @@
       width:1920px; height:1080px;
     }
 
-    .item {
+    .item{
       position:absolute;
-      left:0;
-      top:0;
-      transform-origin: center center;
+      left:0; top:0;
+      transform-origin:center center;
       cursor: grab;
       user-select:none;
       -webkit-user-select:none;
-      touch-action: none;
+      touch-action:none;
+      border:none;
+      -webkit-user-drag:none;
+      user-drag:none;
       will-change: transform, opacity;
-      border: none;
-
-      -webkit-user-drag: none;
-      user-drag: none;
     }
-    .item:active { cursor: grabbing; }
-    .item, .item * { -webkit-user-drag: none; user-drag: none; }
+    .item:active{ cursor: grabbing; }
+    .item, .item * { -webkit-user-drag:none; user-drag:none; }
 
-    .item.selected { outline: 2px solid rgba(124,58,237,.95); outline-offset: 2px; }
-    .item.lowOpacity { outline: 2px dashed rgba(255,255,255,.35); outline-offset: 2px; }
+    .item.selected { outline:2px solid rgba(124,58,237,.95); outline-offset:2px; }
 
     .ytBox{
       background: rgba(255,255,255,.06);
@@ -77,16 +74,15 @@
       overflow: hidden;
     }
     .ytBox::before{
-      content: "YouTube";
-      position:absolute;
-      left:8px; top:6px;
-      font: 12px/1 monospace;
-      color: rgba(255,255,255,.65);
-      z-index: 2;
-      pointer-events: none;
+      content:"YouTube";
+      position:absolute; left:8px; top:6px;
+      font:12px/1 monospace;
+      color:rgba(255,255,255,.65);
+      z-index:2;
+      pointer-events:none;
     }
 
-    .hint {
+    .hint{
       padding: 8px 10px;
       border-radius: 10px;
       background: #f6f7fb;
@@ -95,24 +91,15 @@
       color: #333;
       line-height: 1.35;
     }
-
-    .snapRow button{
-      padding: 8px 10px;
-      border-radius: 10px;
-      border: 1px solid #ddd;
-      background: #fff;
-      cursor: pointer;
-      font-weight: 700;
-    }
-    .snapRow button:disabled { opacity: .5; cursor: not-allowed; }
   </style>
 </head>
 <body>
   <h2>Overlay Control</h2>
 
   <div class="card hint">
-    В control теперь HUD как в overlay (подложка).<br>
-    Snap ставит в углы <b>как в overlay</b> (край считается по базовому размеру, без учёта scale).
+    • Клик по элементу — выделить.<br>
+    • Тяни элемент — двигается (без “призраков”).<br>
+    • Подложка = overlay HUD (как в OBS).
   </div>
 
   <div class="card">
@@ -153,7 +140,7 @@
 
   <div class="card">
     <b>Поле (перетаскивание):</b>
-    <div class="small">Внутри 1920×1080. В OBS для overlay поставь Browser Source 1920×1080.</div>
+    <div class="small">Внутри 1920×1080.</div>
     <div id="viewport">
       <div id="scene">
         <iframe id="bgFrame"></iframe>
@@ -169,14 +156,6 @@
       <button id="resetBtn" disabled>Reset</button>
       <button id="delBtn" disabled>Delete</button>
       <button id="hideBtn" disabled>Hide/Show</button>
-    </div>
-
-    <div class="row snapRow">
-      <button id="snapTL" disabled>Snap TL</button>
-      <button id="snapTR" disabled>Snap TR</button>
-      <button id="snapBL" disabled>Snap BL</button>
-      <button id="snapBR" disabled>Snap BR</button>
-      <button id="snapC"  disabled>Center</button>
     </div>
 
     <div class="row">
@@ -217,95 +196,85 @@
     };
 
     const W = 1920, H = 1080;
-    const PREVIEW_MIN_OPACITY = 0.18;
-    const PAD = 0; // отступ от края, если надо: 10
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
 
-    const $ = (id) => document.getElementById(id);
+    const $ = (id)=>document.getElementById(id);
     const viewport = $("viewport");
     const scene = $("scene");
     const stage = $("stage");
     const bgFrame = $("bgFrame");
 
-    // disable HTML5 drag
-    stage.addEventListener("dragstart", (e) => e.preventDefault());
-    viewport.addEventListener("dragstart", (e) => e.preventDefault());
+    // disable HTML5 drag ghost
+    stage.addEventListener("dragstart",(e)=>e.preventDefault());
+    viewport.addEventListener("dragstart",(e)=>e.preventDefault());
 
     const qs = new URLSearchParams(location.search);
     const qsId = qs.get("id") || "default";
     $("overlayId").value = qsId;
 
     let overlayId = $("overlayId").value.trim() || "default";
-    function basePath() { return `walkathon/overlays/${overlayId}/items`; }
+    function basePath(){ return `walkathon/overlays/${overlayId}/items`; }
 
-    function updateBgFrame(){
+    function updateBg(){
       const url = new URL("overlay.html", location.href);
       url.searchParams.set("id", overlayId);
       url.searchParams.set("bg", "1");
       url.searchParams.set("noitems", "1");
       bgFrame.src = url.toString();
     }
-    updateBgFrame();
+    updateBg();
 
-    // Auth
-    $("loginBtn").onclick = async () => {
-      await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value);
-    };
-    $("logoutBtn").onclick = async () => signOut(auth);
-
-    onAuthStateChanged(auth, (user) => {
-      $("authState").textContent = user ? `Logged: ${user.email}` : "Not logged";
-      $("logoutBtn").disabled = !user;
-      $("loginBtn").disabled = !!user;
-    });
-
-    // Scale
-    function getScale() {
-      const rect = viewport.getBoundingClientRect();
-      return rect.width / W;
+    function getScale(){
+      const r = viewport.getBoundingClientRect();
+      return r.width / W;
     }
-    function applyScale() {
+    function applyScale(){
       scene.style.transform = `scale(${getScale()})`;
     }
     applyScale();
     addEventListener("resize", applyScale);
 
-    // Data
+    // auth
+    $("loginBtn").onclick = async ()=> {
+      await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value);
+    };
+    $("logoutBtn").onclick = async ()=> signOut(auth);
+
+    onAuthStateChanged(auth,(u)=>{
+      $("authState").textContent = u ? `Logged: ${u.email}` : "Not logged";
+      $("logoutBtn").disabled = !u;
+      $("loginBtn").disabled = !!u;
+    });
+
+    // state
     let selectedId = null;
     let itemsCache = {};
     const els = new Map();
 
-    function setControlsEnabled(enabled) {
-      $("resetBtn").disabled = !enabled;
-      $("delBtn").disabled = !enabled;
-      $("hideBtn").disabled = !enabled;
-      $("layerSel").disabled = !enabled;
-      $("op").disabled = !enabled;
-      $("sc").disabled = !enabled;
-      $("rt").disabled = !enabled;
-
-      $("snapTL").disabled = !enabled;
-      $("snapTR").disabled = !enabled;
-      $("snapBL").disabled = !enabled;
-      $("snapBR").disabled = !enabled;
-      $("snapC").disabled  = !enabled;
+    function setControlsEnabled(v){
+      $("resetBtn").disabled = !v;
+      $("delBtn").disabled = !v;
+      $("hideBtn").disabled = !v;
+      $("layerSel").disabled = !v;
+      $("op").disabled = !v;
+      $("sc").disabled = !v;
+      $("rt").disabled = !v;
     }
 
-    function select(id) {
+    function select(id){
       selectedId = id;
       for (const [iid, el] of els.entries()) el.classList.toggle("selected", iid === id);
 
-      if (!id) {
+      if (!id){
         $("sel").textContent = "Ничего не выбрано";
         setControlsEnabled(false);
         return;
       }
-
       const it = itemsCache[id] || {};
-      $("sel").textContent = `Selected: ${id} (${it.type || "img"})`;
+      $("sel").textContent = `Selected: ${id} (${it.type||"img"})`;
       setControlsEnabled(true);
 
       $("layerSel").value = it.layer === "back" ? "back" : "front";
@@ -314,153 +283,81 @@
       $("rt").value = it.rotate ?? 0;
     }
 
-    async function patchSelected(patch) {
+    async function patchSelected(patch){
       if (!selectedId) return;
-      itemsCache[selectedId] = { ...(itemsCache[selectedId] || {}), ...patch };
+      itemsCache[selectedId] = { ...(itemsCache[selectedId]||{}), ...patch };
       await update(ref(db, `${basePath()}/${selectedId}`), patch);
     }
 
-    $("layerSel").addEventListener("change", () => patchSelected({ layer: $("layerSel").value }));
-    $("op").addEventListener("input", () => patchSelected({ opacity: Number($("op").value) }));
-    $("sc").addEventListener("input", () => patchSelected({ scale: Number($("sc").value) }));
-    $("rt").addEventListener("input", () => patchSelected({ rotate: Number($("rt").value) }));
+    $("layerSel").addEventListener("change",()=>patchSelected({layer:$("layerSel").value}));
+    $("op").addEventListener("input",()=>patchSelected({opacity:Number($("op").value)}));
+    $("sc").addEventListener("input",()=>patchSelected({scale:Number($("sc").value)}));
+    $("rt").addEventListener("input",()=>patchSelected({rotate:Number($("rt").value)}));
 
-    $("delBtn").onclick = async () => {
+    $("delBtn").onclick = async ()=>{
       if (!selectedId) return;
       await remove(ref(db, `${basePath()}/${selectedId}`));
       select(null);
     };
-
-    $("hideBtn").onclick = async () => {
+    $("hideBtn").onclick = async ()=>{
       if (!selectedId) return;
       const it = itemsCache[selectedId] || {};
-      await patchSelected({ hidden: !(it.hidden === true) });
+      await patchSelected({ hidden: !(it.hidden===true) });
     };
-
-    $("resetBtn").onclick = async () => {
+    $("resetBtn").onclick = async ()=>{
       if (!selectedId) return;
       const it = itemsCache[selectedId] || {};
       const isYT = it.type === "yt";
-      await patchSelected({
-        x: 80, y: 80, scale: 1, rotate: 0, opacity: 1, layer: "front", hidden: false,
-        ...(isYT ? { w: 560, h: 315 } : {})
-      });
+      await patchSelected({ x:80, y:80, scale:1, rotate:0, opacity:1, layer:"front", hidden:false, ...(isYT?{w:560,h:315}:{}) });
     };
 
-    // Helpers
     function parseYouTubeId(url){
-      const s = String(url || "").trim();
-      let m = s.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
-      if (m) return m[1];
-      m = s.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
-      if (m) return m[1];
-      m = s.match(/\/embed\/([a-zA-Z0-9_-]{6,})/);
-      if (m) return m[1];
+      const s = String(url||"").trim();
+      let m = s.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/); if (m) return m[1];
+      m = s.match(/[?&]v=([a-zA-Z0-9_-]{6,})/); if (m) return m[1];
+      m = s.match(/\/embed\/([a-zA-Z0-9_-]{6,})/); if (m) return m[1];
       return null;
     }
     function ytSrc(id){
-      const vid = encodeURIComponent(id || "");
+      const vid = encodeURIComponent(id||"");
       return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${vid}`;
     }
 
-    function getItemBaseWH(id){
-      const it = itemsCache[id] || {};
-      if (it.type === "yt") {
-        return { w: Number(it.w || 560), h: Number(it.h || 315) };
-      }
-      const el = els.get(id);
-      if (el && el.tagName === "IMG" && el.naturalWidth && el.naturalHeight) {
-        return { w: el.naturalWidth, h: el.naturalHeight };
-      }
-      return { w: 200, h: 200 };
-    }
-
-    // IMPORTANT: clamp and snap WITHOUT SCALE (как в overlay)
-    function clampXY(id, x, y){
-      const { w: bw, h: bh } = getItemBaseWH(id);
-      const maxX = Math.max(PAD, W - bw - PAD);
-      const maxY = Math.max(PAD, H - bh - PAD);
-      const cx = Math.min(Math.max(x, PAD), maxX);
-      const cy = Math.min(Math.max(y, PAD), maxY);
-      return { x: Math.round(cx), y: Math.round(cy) };
-    }
-
-    function applyPreview(id, x, y){
-      const it = itemsCache[id] || {};
-      const s = Number(it.scale ?? 1);
-      const r = Number(it.rotate ?? 0);
-      const o = Number(it.opacity ?? 1);
-      const el = els.get(id);
-      if (!el) return;
-      el.style.opacity = String(Math.max(o, PREVIEW_MIN_OPACITY));
-      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
-    }
-
-    async function setXY(id, x, y){
-      const c = clampXY(id, x, y);
-      itemsCache[id] = { ...(itemsCache[id] || {}), x: c.x, y: c.y };
-      applyPreview(id, c.x, c.y);
-      await update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
-    }
-
-    async function snap(pos){
-      if (!selectedId) return;
-
-      const { w: bw, h: bh } = getItemBaseWH(selectedId);
-
-      let x = 0, y = 0;
-      if (pos === "TL") { x = PAD; y = PAD; }
-      if (pos === "TR") { x = W - bw - PAD; y = PAD; }
-      if (pos === "BL") { x = PAD; y = H - bh - PAD; }
-      if (pos === "BR") { x = W - bw - PAD; y = H - bh - PAD; }
-      if (pos === "C")  { x = (W - bw) / 2; y = (H - bh) / 2; }
-
-      await setXY(selectedId, x, y);
-    }
-
-    $("snapTL").onclick = () => snap("TL");
-    $("snapTR").onclick = () => snap("TR");
-    $("snapBL").onclick = () => snap("BL");
-    $("snapBR").onclick = () => snap("BR");
-    $("snapC").onclick  = () => snap("C");
-
-    async function addItem(kind, url, layer) {
+    async function addItem(kind, url, layer){
       const id = "it_" + Math.random().toString(16).slice(2);
-      const base = { layer: layer === "back" ? "back" : "front", x: 80, y: 80, scale: 1, rotate: 0, opacity: 1, hidden: false };
+      const base = { layer: layer==="back"?"back":"front", x:80, y:80, scale:1, rotate:0, opacity:1, hidden:false };
 
       let item;
-      if (kind === "yt") {
+      if (kind==="yt"){
         const ytId = parseYouTubeId(url);
         if (!ytId) throw new Error("Не смог распарсить YouTube ID");
-        item = { ...base, type: "yt", ytId, w: 560, h: 315 };
+        item = { ...base, type:"yt", ytId, w:560, h:315 };
       } else {
-        item = { ...base, type: "img", url };
+        item = { ...base, type:"img", url };
       }
 
       await set(ref(db, `${basePath()}/${id}`), item);
       select(id);
     }
 
-    $("addBtn").onclick = async () => {
+    $("addBtn").onclick = async ()=>{
       const kind = $("kind").value;
       const url = $("url").value.trim();
       if (!url) return alert("Вставь URL");
-      try {
+      try{
         await addItem(kind, url, $("newLayer").value);
-        $("url").value = "";
-      } catch (e) {
-        alert(e.message || e);
-      }
+        $("url").value="";
+      }catch(e){ alert(e.message||e); }
     };
 
-    $("overlayId").addEventListener("change", () => {
+    $("overlayId").addEventListener("change", ()=>{
       overlayId = $("overlayId").value.trim() || "default";
-      updateBgFrame();
+      updateBg();
       bind();
     });
 
     function makeEl(it){
-      if (it.type === "yt") {
+      if (it.type==="yt"){
         const box = document.createElement("div");
         box.className = "item ytBox";
         box.style.position = "absolute";
@@ -473,16 +370,16 @@
         f.style.height = "100%";
         f.style.pointerEvents = "none";
         box.appendChild(f);
+
         return box;
       }
-
       const img = document.createElement("img");
       img.className = "item";
       img.draggable = false;
       return img;
     }
 
-    function setPreviewStyle(el, it, isSelected) {
+    function setStyle(el, it){
       const x = Number(it.x ?? 0);
       const y = Number(it.y ?? 0);
       const s = Number(it.scale ?? 1);
@@ -490,31 +387,26 @@
       const o = Number(it.opacity ?? 1);
       const hidden = it.hidden === true;
 
-      const previewOpacity = hidden ? 0 : Math.max(o, PREVIEW_MIN_OPACITY);
-
       el.style.display = hidden ? "none" : "block";
-      el.style.opacity = String(previewOpacity);
+      el.style.opacity = String(hidden ? 0 : Math.max(o, 0.2));
       el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
 
-      if (it.w && it.h) { el.style.width = Number(it.w) + "px"; el.style.height = Number(it.h) + "px"; }
-      else { el.style.width = ""; el.style.height = ""; }
-
-      el.classList.toggle("lowOpacity", !hidden && o < PREVIEW_MIN_OPACITY);
-      el.classList.toggle("selected", isSelected);
+      if (it.w && it.h){ el.style.width = Number(it.w)+"px"; el.style.height = Number(it.h)+"px"; }
+      else { el.style.width=""; el.style.height=""; }
     }
 
     function attachDrag(el, id){
       let drag = null;
 
-      el.addEventListener("pointerdown", (e) => {
+      el.addEventListener("pointerdown",(e)=>{
         select(id);
         el.setPointerCapture(e.pointerId);
 
         const cur = itemsCache[id] || {};
-        drag = { sx: e.clientX, sy: e.clientY, bx: Number(cur.x ?? 0), by: Number(cur.y ?? 0), dx: 0, dy: 0, scale: getScale() };
+        drag = { sx:e.clientX, sy:e.clientY, bx:Number(cur.x??0), by:Number(cur.y??0), dx:0, dy:0, scale:getScale() };
       });
 
-      el.addEventListener("pointermove", (e) => {
+      el.addEventListener("pointermove",(e)=>{
         if (!drag) return;
         drag.dx = (e.clientX - drag.sx) / drag.scale;
         drag.dy = (e.clientY - drag.sy) / drag.scale;
@@ -522,12 +414,11 @@
         const nx = Math.round(drag.bx + drag.dx);
         const ny = Math.round(drag.by + drag.dy);
 
-        const c = clampXY(id, nx, ny);
-        itemsCache[id] = { ...(itemsCache[id] || {}), x: c.x, y: c.y };
-        applyPreview(id, c.x, c.y);
+        itemsCache[id] = { ...(itemsCache[id]||{}), x:nx, y:ny };
+        setStyle(el, itemsCache[id]);
       });
 
-      el.addEventListener("pointerup", async () => {
+      el.addEventListener("pointerup", async ()=>{
         if (!drag) return;
         drag = null;
         const cur = itemsCache[id] || {};
@@ -535,26 +426,20 @@
       });
     }
 
-    function upsert(id, it) {
+    function upsert(id, it){
       let el = els.get(id);
       const wantType = it.type === "yt" ? "yt" : "img";
 
-      if (!el || el.dataset.type !== wantType) {
+      if (!el || el.dataset.type !== wantType){
         if (el) el.remove();
         el = makeEl(it);
         el.dataset.type = wantType;
         els.set(id, el);
         stage.appendChild(el);
         attachDrag(el, id);
-
-        if (wantType === "img") {
-          el.addEventListener("load", () => {
-            if (selectedId === id) snap("TR"); // необязательно, но удобно
-          });
-        }
       }
 
-      if (wantType === "yt") {
+      if (wantType==="yt"){
         const iframe = el.querySelector("iframe");
         const src = ytSrc(it.ytId || "");
         if (iframe && iframe.src !== src) iframe.src = src;
@@ -562,27 +447,29 @@
         el.src = it.url || "";
       }
 
-      setPreviewStyle(el, it, id === selectedId);
+      setStyle(el, it);
     }
 
-    function prune(items) {
+    function prune(items){
       const alive = new Set(Object.keys(items));
-      for (const [id, el] of els.entries()) {
-        if (!alive.has(id)) { el.remove(); els.delete(id); }
+      for (const [id, el] of els.entries()){
+        if (!alive.has(id)){
+          el.remove();
+          els.delete(id);
+        }
       }
       if (selectedId && !alive.has(selectedId)) select(null);
     }
 
-    // bind
     let bound = false;
-    function bind() {
-      stage.innerHTML = "";
+    function bind(){
+      stage.innerHTML="";
       els.clear();
-      itemsCache = {};
+      itemsCache={};
       select(null);
 
       const r = ref(db, basePath());
-      onValue(r, (snap) => {
+      onValue(r, (snap)=>{
         const items = snap.val() || {};
         itemsCache = items;
         for (const id of Object.keys(items)) upsert(id, items[id]);
