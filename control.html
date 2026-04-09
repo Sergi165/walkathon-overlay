@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Overlay Control (Snap + Clamp)</title>
+  <title>Overlay Control (Snap like Overlay)</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 16px; }
     input, button, select { font-size: 14px; padding: 8px; }
@@ -111,11 +111,8 @@
   <h2>Overlay Control</h2>
 
   <div class="card hint">
-    • Preview 1:1: HUD как в overlay.<br>
-    • Drag элемента = двигаешь его.<br>
-    • Drag по пустому месту = “тащишь душу” выбранного.<br>
-    • Элементы НЕ вылезают за край (clamp).<br>
-    • Кнопки Snap ставят ровно в углы.
+    В control теперь HUD как в overlay (подложка).<br>
+    Snap ставит в углы <b>как в overlay</b> (край считается по базовому размеру, без учёта scale).
   </div>
 
   <div class="card">
@@ -156,7 +153,7 @@
 
   <div class="card">
     <b>Поле (перетаскивание):</b>
-    <div class="small">Внутри 1920×1080. Совпадает с OBS Browser Source 1920×1080.</div>
+    <div class="small">Внутри 1920×1080. В OBS для overlay поставь Browser Source 1920×1080.</div>
     <div id="viewport">
       <div id="scene">
         <iframe id="bgFrame"></iframe>
@@ -221,7 +218,7 @@
 
     const W = 1920, H = 1080;
     const PREVIEW_MIN_OPACITY = 0.18;
-    const PAD = 0; // если хочешь отступ от края, поставь 10
+    const PAD = 0; // отступ от края, если надо: 10
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -371,25 +368,18 @@
       if (it.type === "yt") {
         return { w: Number(it.w || 560), h: Number(it.h || 315) };
       }
-      // img: пытаемся взять natural
       const el = els.get(id);
       if (el && el.tagName === "IMG" && el.naturalWidth && el.naturalHeight) {
         return { w: el.naturalWidth, h: el.naturalHeight };
       }
-      // fallback
       return { w: 200, h: 200 };
     }
 
+    // IMPORTANT: clamp and snap WITHOUT SCALE (как в overlay)
     function clampXY(id, x, y){
-      const it = itemsCache[id] || {};
-      const s = Number(it.scale ?? 1);
       const { w: bw, h: bh } = getItemBaseWH(id);
-      const w = bw * s;
-      const h = bh * s;
-
-      const maxX = Math.max(PAD, W - w - PAD);
-      const maxY = Math.max(PAD, H - h - PAD);
-
+      const maxX = Math.max(PAD, W - bw - PAD);
+      const maxY = Math.max(PAD, H - bh - PAD);
       const cx = Math.min(Math.max(x, PAD), maxX);
       const cy = Math.min(Math.max(y, PAD), maxY);
       return { x: Math.round(cx), y: Math.round(cy) };
@@ -402,7 +392,6 @@
       const o = Number(it.opacity ?? 1);
       const el = els.get(id);
       if (!el) return;
-
       el.style.opacity = String(Math.max(o, PREVIEW_MIN_OPACITY));
       el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
     }
@@ -414,24 +403,17 @@
       await update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
     }
 
-    // Snap buttons
     async function snap(pos){
       if (!selectedId) return;
 
-      const it = itemsCache[selectedId] || {};
-      const s = Number(it.scale ?? 1);
       const { w: bw, h: bh } = getItemBaseWH(selectedId);
-      const w = bw * s;
-      const h = bh * s;
 
-      let x = Number(it.x ?? 0);
-      let y = Number(it.y ?? 0);
-
+      let x = 0, y = 0;
       if (pos === "TL") { x = PAD; y = PAD; }
-      if (pos === "TR") { x = W - w - PAD; y = PAD; }
-      if (pos === "BL") { x = PAD; y = H - h - PAD; }
-      if (pos === "BR") { x = W - w - PAD; y = H - h - PAD; }
-      if (pos === "C")  { x = (W - w) / 2; y = (H - h) / 2; }
+      if (pos === "TR") { x = W - bw - PAD; y = PAD; }
+      if (pos === "BL") { x = PAD; y = H - bh - PAD; }
+      if (pos === "BR") { x = W - bw - PAD; y = H - bh - PAD; }
+      if (pos === "C")  { x = (W - bw) / 2; y = (H - bh) / 2; }
 
       await setXY(selectedId, x, y);
     }
@@ -442,7 +424,6 @@
     $("snapBR").onclick = () => snap("BR");
     $("snapC").onclick  = () => snap("C");
 
-    // Add item
     async function addItem(kind, url, layer) {
       const id = "it_" + Math.random().toString(16).slice(2);
       const base = { layer: layer === "back" ? "back" : "front", x: 80, y: 80, scale: 1, rotate: 0, opacity: 1, hidden: false };
@@ -478,14 +459,12 @@
       bind();
     });
 
-    // Create element
     function makeEl(it){
       if (it.type === "yt") {
         const box = document.createElement("div");
         box.className = "item ytBox";
         box.style.position = "absolute";
         box.draggable = false;
-        box.addEventListener("dragstart", (e) => e.preventDefault());
 
         const f = document.createElement("iframe");
         f.allow = "autoplay; encrypted-media";
@@ -500,7 +479,6 @@
       const img = document.createElement("img");
       img.className = "item";
       img.draggable = false;
-      img.addEventListener("dragstart", (e) => e.preventDefault());
       return img;
     }
 
@@ -533,12 +511,7 @@
         el.setPointerCapture(e.pointerId);
 
         const cur = itemsCache[id] || {};
-        drag = {
-          sx: e.clientX, sy: e.clientY,
-          bx: Number(cur.x ?? 0), by: Number(cur.y ?? 0),
-          dx: 0, dy: 0,
-          scale: getScale()
-        };
+        drag = { sx: e.clientX, sy: e.clientY, bx: Number(cur.x ?? 0), by: Number(cur.y ?? 0), dx: 0, dy: 0, scale: getScale() };
       });
 
       el.addEventListener("pointermove", (e) => {
@@ -574,16 +547,9 @@
         stage.appendChild(el);
         attachDrag(el, id);
 
-        // если img загрузился — можно будет правильно снапать по размеру
         if (wantType === "img") {
           el.addEventListener("load", () => {
-            // обновим clamp на всякий
-            if (selectedId === id) {
-              const cur = itemsCache[id] || {};
-              const c = clampXY(id, Number(cur.x ?? 0), Number(cur.y ?? 0));
-              itemsCache[id] = { ...cur, x: c.x, y: c.y };
-              applyPreview(id, c.x, c.y);
-            }
+            if (selectedId === id) snap("TR"); // необязательно, но удобно
           });
         }
       }
@@ -606,68 +572,6 @@
       }
       if (selectedId && !alive.has(selectedId)) select(null);
     }
-
-    // “тащить душу” по пустому месту
-    let stageDrag = null;
-
-    stage.addEventListener("pointerdown", (e) => {
-      if (e.target.closest && e.target.closest(".item")) return;
-      if (!selectedId) return;
-
-      stage.setPointerCapture(e.pointerId);
-
-      const cur = itemsCache[selectedId] || {};
-      stageDrag = {
-        id: selectedId,
-        sx: e.clientX, sy: e.clientY,
-        bx: Number(cur.x ?? 0), by: Number(cur.y ?? 0),
-        dx: 0, dy: 0,
-        scale: getScale()
-      };
-    });
-
-    stage.addEventListener("pointermove", (e) => {
-      if (!stageDrag) return;
-      stageDrag.dx = (e.clientX - stageDrag.sx) / stageDrag.scale;
-      stageDrag.dy = (e.clientY - stageDrag.sy) / stageDrag.scale;
-
-      const nx = Math.round(stageDrag.bx + stageDrag.dx);
-      const ny = Math.round(stageDrag.by + stageDrag.dy);
-
-      const c = clampXY(stageDrag.id, nx, ny);
-      itemsCache[stageDrag.id] = { ...(itemsCache[stageDrag.id] || {}), x: c.x, y: c.y };
-      applyPreview(stageDrag.id, c.x, c.y);
-    });
-
-    stage.addEventListener("pointerup", async () => {
-      if (!stageDrag) return;
-      const id = stageDrag.id;
-      stageDrag = null;
-
-      const cur = itemsCache[id] || {};
-      await update(ref(db, `${basePath()}/${id}`), { x: cur.x ?? 0, y: cur.y ?? 0 });
-    });
-
-    // arrow nudge
-    window.addEventListener("keydown", async (e) => {
-      if (!selectedId) return;
-
-      const step = e.shiftKey ? 10 : 1;
-      let dx = 0, dy = 0;
-      if (e.key === "ArrowLeft") dx = -step;
-      else if (e.key === "ArrowRight") dx = step;
-      else if (e.key === "ArrowUp") dy = -step;
-      else if (e.key === "ArrowDown") dy = step;
-      else return;
-
-      e.preventDefault();
-
-      const cur = itemsCache[selectedId] || {};
-      const nx = Math.round(Number(cur.x ?? 0) + dx);
-      const ny = Math.round(Number(cur.y ?? 0) + dy);
-
-      await setXY(selectedId, nx, ny);
-    });
 
     // bind
     let bound = false;
