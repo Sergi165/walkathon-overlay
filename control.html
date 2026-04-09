@@ -51,12 +51,16 @@
       transform-origin: top left;
     }
 
-    #bgFrame{
+    #bgFrame, #twitchPreviewFrame {
       position:absolute;
       left:0; top:0;
       width:1920px; height:1080px;
       border:0;
       pointer-events:none;
+    }
+    
+    #twitchPreviewFrame {
+      display: none; /* Скрыто по умолчанию */
     }
 
     #stage{
@@ -103,9 +107,8 @@
   <h2>Overlay Control</h2>
 
   <div class="card hint">
-    <b>Версия:</b> control-build-1<br>
-    • <b>Clamp</b> = “забор”: ON → не даёт вылезать за 1920×1080, OFF → можешь вылезать как хочешь.<br>
-    • <b>Fix inside</b> — выправляет выбранный элемент внутрь кадра и пишет x/y в Firebase.<br>
+    <b>Версия:</b> control-build-4 (twitch-preview)<br>
+    • Перетаскивайте элементы внутри поля 1920×1080.<br>
     • Стрелки двигают выбранный: 1px, <kbd>Shift</kbd>+стрелки: 10px.
   </div>
 
@@ -129,18 +132,6 @@
 
   <div class="card">
     <div class="row">
-      <label style="flex-direction:row;align-items:center;gap:8px">
-        <input type="checkbox" id="clampToggle" checked />
-        Clamp (забор)
-      </label>
-
-      <button id="fixBtn" disabled>Fix inside</button>
-      <span class="small">Если что-то “наполовину за кадром” — выдели и жми Fix.</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="row">
       <select id="kind">
         <option value="img">Image (URL)</option>
         <option value="yt">YouTube (URL)</option>
@@ -159,10 +150,17 @@
 
   <div class="card">
     <b>Поле (перетаскивание):</b>
-    <div class="small">Подложка = overlay HUD. Внутри 1920×1080.</div>
+    <div class="row">
+      <span class="small">Подложка = overlay HUD. Внутри 1920×1080.</span>
+      <label style="flex-direction:row;align-items:center;gap:8px;margin-left:auto;">
+        <input type="checkbox" id="twitchPreviewToggle" />
+        Показать превью стрима Twitch (sergiei2)
+      </label>
+    </div>
     <div id="viewport">
       <div id="scene">
         <iframe id="bgFrame"></iframe>
+        <iframe id="twitchPreviewFrame"></iframe>
         <div id="stage"></div>
       </div>
     </div>
@@ -216,6 +214,7 @@
 
     const W = 1920, H = 1080;
     const PREVIEW_OP_MIN = 0.2;
+    const TWITCH_CHANNEL = "sergiei2";
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -226,10 +225,23 @@
     const scene = $("scene");
     const stage = $("stage");
     const bgFrame = $("bgFrame");
-    const clampToggle = $("clampToggle");
-
+    const twitchPreviewToggle = $("twitchPreviewToggle");
+    const twitchPreviewFrame = $("twitchPreviewFrame");
+    
     stage.addEventListener("dragstart",(e)=>e.preventDefault());
     viewport.addEventListener("dragstart",(e)=>e.preventDefault());
+
+    // --- Twitch Preview Logic ---
+    twitchPreviewToggle.addEventListener("change", () => {
+        if (twitchPreviewToggle.checked) {
+            const parentDomain = location.hostname || "localhost";
+            twitchPreviewFrame.src = `https://player.twitch.tv/?channel=${TWITCH_CHANNEL}&parent=${parentDomain}&muted=true&autoplay=true`;
+            twitchPreviewFrame.style.display = "block";
+        } else {
+            twitchPreviewFrame.src = ""; // Stop loading to save resources
+            twitchPreviewFrame.style.display = "none";
+        }
+    });
 
     const qs = new URLSearchParams(location.search);
     const qsId = qs.get("id") || "default";
@@ -279,7 +291,6 @@
       $("op").disabled = !v;
       $("sc").disabled = !v;
       $("rt").disabled = !v;
-      $("fixBtn").disabled = !v;
     }
 
     function select(id){
@@ -303,11 +314,6 @@
       if (!selectedId) return;
       itemsCache[selectedId] = { ...(itemsCache[selectedId]||{}), ...patch };
       await update(ref(db, `${basePath()}/${selectedId}`), patch);
-
-      // если включён clamp и меняли scale/rotate — можно поправить внутрь
-      if (clampToggle.checked && (patch.scale != null || patch.rotate != null)) {
-        await fixInside(selectedId);
-      }
     }
 
     $("layerSel").addEventListener("change",()=>patchSelected({layer:$("layerSel").value}));
@@ -412,55 +418,6 @@
       else { el.style.width=""; el.style.height=""; }
     }
 
-    // правильный clamp по реальным размерам DOM (offset) × scale
-    function clampXY(id, x, y){
-      const it = itemsCache[id] || {};
-      const el = els.get(id);
-      const s = Number(it.scale ?? 1);
-
-      let baseW = 200, baseH = 200;
-
-      if (it.type === "yt") {
-        baseW = Number(it.w || 560);
-        baseH = Number(it.h || 315);
-      } else if (el) {
-        // offsetWidth/Height = базовый размер без transform scale
-        baseW = el.offsetWidth || baseW;
-        baseH = el.offsetHeight || baseH;
-      }
-
-      const w = baseW * s;
-      const h = baseH * s;
-
-      const maxX = Math.max(0, W - w);
-      const maxY = Math.max(0, H - h);
-
-      return {
-        x: Math.round(Math.min(Math.max(x, 0), maxX)),
-        y: Math.round(Math.min(Math.max(y, 0), maxY))
-      };
-    }
-
-    async function fixInside(id){
-      const cur = itemsCache[id] || {};
-      const x0 = Number(cur.x ?? 0);
-      const y0 = Number(cur.y ?? 0);
-
-      const c = clampXY(id, x0, y0);
-      if (c.x === x0 && c.y === y0) return;
-
-      itemsCache[id] = { ...cur, x: c.x, y: c.y };
-      const el = els.get(id);
-      if (el) renderStyle(el, itemsCache[id]);
-
-      await update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
-    }
-
-    $("fixBtn").onclick = async ()=> {
-      if (!selectedId) return;
-      await fixInside(selectedId);
-    };
-
     function attachDrag(el, id){
       let drag = null;
 
@@ -479,11 +436,6 @@
 
         let nx = Math.round(drag.bx + drag.dx);
         let ny = Math.round(drag.by + drag.dy);
-
-        if (clampToggle.checked) {
-          const c = clampXY(id, nx, ny);
-          nx = c.x; ny = c.y;
-        }
 
         itemsCache[id] = { ...(itemsCache[id]||{}), x:nx, y:ny };
         renderStyle(el, itemsCache[id]);
@@ -519,22 +471,7 @@
       }
 
       itemsCache[id] = it;
-
-      // если clamp включён — сразу фикснем OOB (но не телепортируем при drag, только при апдейте)
-      if (clampToggle.checked) {
-        const c = clampXY(id, Number(it.x??0), Number(it.y??0));
-        if (c.x !== it.x || c.y !== it.y) {
-          itemsCache[id] = { ...it, x:c.x, y:c.y };
-          update(ref(db, `${basePath()}/${id}`), { x:c.x, y:c.y });
-        }
-      }
-
       renderStyle(el, itemsCache[id]);
-
-      // для картинок после загрузки — пересчитать размеры и фикснуть
-      if (wantType==="img") {
-        el.onload = () => { if (clampToggle.checked) fixInside(id); };
-      }
     }
 
     function prune(items){
@@ -548,7 +485,7 @@
       if (selectedId && !alive.has(selectedId)) select(null);
     }
 
-    // arrow nudge (with optional clamp)
+    // arrow nudge
     window.addEventListener("keydown", async (e) => {
       if (!selectedId) return;
       const step = e.shiftKey ? 10 : 1;
@@ -564,11 +501,6 @@
       const cur = itemsCache[selectedId] || {};
       let nx = Number(cur.x??0) + dx;
       let ny = Number(cur.y??0) + dy;
-
-      if (clampToggle.checked) {
-        const c = clampXY(selectedId, nx, ny);
-        nx = c.x; ny = c.y;
-      }
 
       itemsCache[selectedId] = { ...cur, x:nx, y:ny };
       const el = els.get(selectedId);
