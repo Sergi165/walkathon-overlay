@@ -7,6 +7,8 @@
 
   <script>
     const CHANNEL_NAME = "sergiei2";
+    const MESSAGE_LIFETIME = 60;
+    const MAX_MESSAGES = 5;
   </script>
 
   <style>
@@ -24,7 +26,6 @@
 
     .wrap { padding:12px; display:grid; gap:12px; }
     .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; }
-
     .sticky-preview { position: sticky; top: 12px; z-index: 50; }
 
     .title { font-size:13px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; }
@@ -48,6 +49,7 @@
 
     .stream-preview { width:100%; aspect-ratio:16/9; border:0; border-radius:12px; background:#000; }
 
+    /* compass + map */
     .compass { display:flex; align-items:stretch; gap:12px; }
     .rose {
       width: 86px; height: 86px; border-radius: 50%;
@@ -83,15 +85,39 @@
       background:#000;
     }
     .mapFrame{ width:100%; height:100%; border:0; }
+
+    /* chat */
+    .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    #chat { display:flex; flex-direction: column-reverse; gap:6px; max-height: 420px; overflow:hidden; }
+
+    .message {
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.05);
+      color: #fff;
+      font-size: 16px;
+      line-height: 1.3;
+      opacity: 0;
+      animation: fadeIn 0.2s forwards;
+      max-width: 100%;
+      word-wrap: break-word;
+    }
+    .message.fade-out { animation: fadeOut 0.4s forwards; }
+    .username { font-weight: 700; margin-right: 6px; }
+
+    @keyframes fadeIn { from {opacity:0; transform:translateY(6px)} to {opacity:1; transform:translateY(0)} }
+    @keyframes fadeOut { from {opacity:1; transform:translateY(0)} to {opacity:0; transform:translateY(-6px)} }
   </style>
 </head>
 <body>
   <div class="wrap">
+    <!-- PREVIEW -->
     <div class="card sticky-preview">
       <div class="title">Stream Preview</div>
       <iframe class="stream-preview" id="twitchPreview" allowfullscreen></iframe>
     </div>
 
+    <!-- TRACKER -->
     <div class="card">
       <div class="title">Walkathon Tracker</div>
       <div class="big" id="done">0m</div>
@@ -115,6 +141,7 @@
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
     </div>
 
+    <!-- COMPASS + MAP -->
     <div class="card">
       <div class="title">Compass + Google Maps (Satellite)</div>
       <div class="compass">
@@ -127,6 +154,13 @@
         </div>
       </div>
       <div class="muted" style="margin-top:8px" id="mapInfo">Map: idle</div>
+    </div>
+
+    <!-- CHAT -->
+    <div class="card">
+      <div class="title">Twitch Chat — sergiei2</div>
+      <div class="chat-status" id="chatStatus">starting...</div>
+      <div id="chat"></div>
     </div>
   </div>
 
@@ -145,7 +179,7 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
-    // Twitch preview (parent must match domain)
+    // Twitch preview parent must match current domain
     const parent = location.hostname;
     document.getElementById("twitchPreview").src =
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
@@ -176,6 +210,111 @@
     const mapFrame = document.getElementById("mapFrame");
     const mapInfo  = document.getElementById("mapInfo");
 
+    // ===== Chat =====
+    const chatEl = document.getElementById("chat");
+    const chatStatusEl = document.getElementById("chatStatus");
+
+    function setChatStatus(text){ chatStatusEl.textContent = text; }
+
+    function addMessage(username, text, color) {
+      const msg = document.createElement("div");
+      msg.className = "message";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "username";
+      nameSpan.textContent = username + ":";
+      if (color) nameSpan.style.color = color;
+      msg.appendChild(nameSpan);
+
+      const textSpan = document.createElement("span");
+      textSpan.textContent = text;
+      msg.appendChild(textSpan);
+
+      chatEl.prepend(msg);
+
+      while (chatEl.children.length > MAX_MESSAGES) {
+        chatEl.lastChild.remove();
+      }
+
+      setTimeout(() => {
+        msg.classList.add("fade-out");
+        setTimeout(() => msg.remove(), 400);
+      }, MESSAGE_LIFETIME * 1000);
+    }
+
+    let ws;
+
+    function connectTwitch() {
+      if (!CHANNEL_NAME) { setChatStatus("channel not set"); return; }
+
+      const nick = "justinfan" + Math.floor(Math.random() * 80000 + 1000);
+      ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+
+      ws.addEventListener("open", () => {
+        setChatStatus("connected");
+        ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership\r\n");
+        ws.send("NICK " + nick + "\r\n");
+        ws.send("JOIN #" + CHANNEL_NAME.toLowerCase() + "\r\n");
+      });
+
+      ws.addEventListener("message", (event) => {
+        const lines = event.data.split("\r\n");
+        for (const line of lines) {
+          if (!line) continue;
+          if (line.startsWith("PING")) { ws.send("PONG :tmi.twitch.tv\r\n"); continue; }
+          handleIrcLine(line);
+        }
+      });
+
+      ws.addEventListener("close", () => {
+        setChatStatus("reconnecting in 5s...");
+        setTimeout(connectTwitch, 5000);
+      });
+
+      ws.addEventListener("error", () => {
+        setChatStatus("socket error");
+        ws.close();
+      });
+    }
+
+    function handleIrcLine(line) {
+      let tags = {};
+      let rest = line;
+
+      if (rest.startsWith("@")) {
+        const spaceIdx = rest.indexOf(" ");
+        const tagStr = rest.slice(1, spaceIdx);
+        rest = rest.slice(spaceIdx + 1);
+
+        tagStr.split(";").forEach(part => {
+          const [k, v] = part.split("=");
+          tags[k] = v || "";
+        });
+      }
+
+      if (!rest.startsWith(":")) return;
+
+      const prefixEnd = rest.indexOf(" ");
+      const prefix = rest.slice(1, prefixEnd);
+      rest = rest.slice(prefixEnd + 1);
+
+      const spaceIdx = rest.indexOf(" ");
+      const command = rest.slice(0, spaceIdx);
+      const params = rest.slice(spaceIdx + 1);
+
+      if (command === "PRIVMSG") {
+        const msgIdx = params.indexOf(" :");
+        if (msgIdx === -1) return;
+
+        const text = params.slice(msgIdx + 2).slice(0, 350);
+        const username = (tags["display-name"] || prefix.split("!")[0]) || "user";
+        const color = tags["color"] || "#ffffff";
+
+        addMessage(username, text, color);
+      }
+    }
+
+    // ===== Auth =====
     let authed = false;
     function setBtnsEnabled(v){
       startBtn.disabled = !v;
@@ -204,6 +343,7 @@
       statusEl.textContent = "auth error";
     });
 
+    // ===== Tracker =====
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
     let watchId = null;
@@ -248,7 +388,7 @@
       });
     }
 
-    // Google Maps satellite
+    // ===== Google Maps satellite =====
     let lastMapKey = "";
     let lastMapAt = 0;
 
@@ -293,10 +433,12 @@
         }
 
         const point = { lat: latitude, lon: longitude };
+
         if (lastPoint) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
           if (step >= MIN_STEP_METERS && step <= MAX_STEP_METERS) distanceMeters += step;
         }
+
         lastPoint = point;
 
         updateUI({ status: "tracking", acc: accuracy, speed });
@@ -318,7 +460,8 @@
 
     async function resetGPS() {
       if (!confirm("Сбросить дистанцию и локацию?")) return;
-      distanceMeters = 0; lastPoint = null;
+      distanceMeters = 0;
+      lastPoint = null;
       updateUI({ status: "reset", acc: null, speed: null });
       setMapBlank();
       await update(stateRef, {
@@ -331,7 +474,7 @@
     stopBtn.onclick  = stopGPS;
     resetBtn.onclick = resetGPS;
 
-    // Compass
+    // ===== Compass =====
     const needleEl = document.getElementById("needle");
     function degToDir(deg) {
       const dirs = ["N","NE","E","SE","S","SW","W","NW"];
@@ -360,6 +503,7 @@
       } catch {}
     }
 
+    // Subscribe state
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
@@ -374,6 +518,7 @@
 
     initCompass();
     updateUI({ status: "idle" });
+    connectTwitch();
   </script>
 </body>
 </html>
