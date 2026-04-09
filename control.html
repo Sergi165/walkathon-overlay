@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Overlay Control (Clamp)</title>
+  <title>Overlay Control (Auto Fix OOB)</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 16px; }
     input, button, select { font-size: 14px; padding: 8px; }
@@ -104,9 +104,7 @@
   <h2>Overlay Control</h2>
 
   <div class="card hint">
-    Без Snap-кнопок.<br>
-    • Тяни элемент — двигается.<br>
-    • Элемент упирается в края (не вылезает).<br>
+    • Если элемент вылез за экран — он будет автоматически “поджат” внутрь 1920×1080 и x/y запишутся в Firebase.<br>
     • Стрелки двигают выбранный элемент: 1px, <kbd>Shift</kbd>+стрелки: 10px.
   </div>
 
@@ -204,7 +202,6 @@
     };
 
     const W = 1920, H = 1080;
-
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
@@ -245,11 +242,8 @@
     addEventListener("resize", applyScale);
 
     // auth
-    $("loginBtn").onclick = async ()=> {
-      await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value);
-    };
+    $("loginBtn").onclick = async ()=> signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value);
     $("logoutBtn").onclick = async ()=> signOut(auth);
-
     onAuthStateChanged(auth,(u)=>{
       $("authState").textContent = u ? `Logged: ${u.email}` : "Not logged";
       $("logoutBtn").disabled = !u;
@@ -274,7 +268,6 @@
     function select(id){
       selectedId = id;
       for (const [iid, el] of els.entries()) el.classList.toggle("selected", iid === id);
-
       if (!id){
         $("sel").textContent = "Ничего не выбрано";
         setControlsEnabled(false);
@@ -283,7 +276,6 @@
       const it = itemsCache[id] || {};
       $("sel").textContent = `Selected: ${id} (${it.type||"img"})`;
       setControlsEnabled(true);
-
       $("layerSel").value = it.layer === "back" ? "back" : "front";
       $("op").value = it.opacity ?? 1;
       $("sc").value = it.scale ?? 1;
@@ -330,29 +322,9 @@
       return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${vid}`;
     }
 
-    function getBaseSize(id){
-      const it = itemsCache[id] || {};
-      if (it.type === "yt") return { w: Number(it.w||560), h: Number(it.h||315) };
-      const el = els.get(id);
-      if (el && el.tagName==="IMG" && el.naturalWidth && el.naturalHeight) return { w: el.naturalWidth, h: el.naturalHeight };
-      return { w: 200, h: 200 };
-    }
-
-    function clampToFrame(id, x, y){
-      const it = itemsCache[id] || {};
-      const s = Number(it.scale ?? 1);
-      const { w: bw, h: bh } = getBaseSize(id);
-      const ww = bw * s;
-      const hh = bh * s;
-      const maxX = Math.max(0, W - ww);
-      const maxY = Math.max(0, H - hh);
-      return { x: Math.round(Math.min(Math.max(x, 0), maxX)), y: Math.round(Math.min(Math.max(y, 0), maxY)) };
-    }
-
     async function addItem(kind, url, layer){
       const id = "it_" + Math.random().toString(16).slice(2);
       const base = { layer: layer==="back"?"back":"front", x:80, y:80, scale:1, rotate:0, opacity:1, hidden:false };
-
       let item;
       if (kind==="yt"){
         const ytId = parseYouTubeId(url);
@@ -361,7 +333,6 @@
       } else {
         item = { ...base, type:"img", url };
       }
-
       await set(ref(db, `${basePath()}/${id}`), item);
       select(id);
     }
@@ -370,10 +341,8 @@
       const kind = $("kind").value;
       const url = $("url").value.trim();
       if (!url) return alert("Вставь URL");
-      try{
-        await addItem(kind, url, $("newLayer").value);
-        $("url").value="";
-      }catch(e){ alert(e.message||e); }
+      try{ await addItem(kind, url, $("newLayer").value); $("url").value=""; }
+      catch(e){ alert(e.message||e); }
     };
 
     $("overlayId").addEventListener("change", ()=>{
@@ -396,7 +365,6 @@
         f.style.height = "100%";
         f.style.pointerEvents = "none";
         box.appendChild(f);
-
         return box;
       }
       const img = document.createElement("img");
@@ -405,7 +373,7 @@
       return img;
     }
 
-    function renderStyle(el, it){
+    function setStyle(el, it){
       const x = Number(it.x ?? 0);
       const y = Number(it.y ?? 0);
       const s = Number(it.scale ?? 1);
@@ -419,6 +387,49 @@
 
       if (it.w && it.h){ el.style.width = Number(it.w)+"px"; el.style.height = Number(it.h)+"px"; }
       else { el.style.width=""; el.style.height=""; }
+    }
+
+    // --- REAL clamp using DOMRect (works for any image size) ---
+    function clampByRect(el, x, y){
+      // set temp position
+      const it = itemsCache[el.dataset.id] || {};
+      const s = Number(it.scale ?? 1);
+      const r = Number(it.rotate ?? 0);
+      const o = Number(it.opacity ?? 1);
+      el.style.opacity = String(Math.max(o, 0.2));
+      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
+
+      // measure
+      const vr = viewport.getBoundingClientRect();
+      const er = el.getBoundingClientRect();
+      const scale = getScale();
+
+      const left = (er.left - vr.left) / scale;
+      const top  = (er.top  - vr.top)  / scale;
+      const right = left + (er.width / scale);
+      const bottom = top + (er.height / scale);
+
+      let dx = 0, dy = 0;
+      if (left < 0) dx += -left;
+      if (top < 0) dy += -top;
+      if (right > W) dx += (W - right);
+      if (bottom > H) dy += (H - bottom);
+
+      return { x: Math.round(x + dx), y: Math.round(y + dy) };
+    }
+
+    async function fixInside(id){
+      const el = els.get(id);
+      if (!el) return;
+      const cur = itemsCache[id] || {};
+      const x0 = Number(cur.x ?? 0);
+      const y0 = Number(cur.y ?? 0);
+      const c = clampByRect(el, x0, y0);
+      if (c.x !== x0 || c.y !== y0) {
+        itemsCache[id] = { ...cur, x: c.x, y: c.y };
+        setStyle(el, itemsCache[id]);
+        await update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
+      }
     }
 
     function attachDrag(el, id){
@@ -440,9 +451,9 @@
         const nx = Math.round(drag.bx + drag.dx);
         const ny = Math.round(drag.by + drag.dy);
 
-        const c = clampToFrame(id, nx, ny);
+        const c = clampByRect(el, nx, ny);
         itemsCache[id] = { ...(itemsCache[id]||{}), x:c.x, y:c.y };
-        renderStyle(el, itemsCache[id]);
+        setStyle(el, itemsCache[id]);
       });
 
       el.addEventListener("pointerup", async ()=>{
@@ -461,22 +472,10 @@
         if (el) el.remove();
         el = makeEl(it);
         el.dataset.type = wantType;
+        el.dataset.id = id;
         els.set(id, el);
         stage.appendChild(el);
         attachDrag(el, id);
-
-        if (wantType==="img") {
-          el.addEventListener("load", async () => {
-            // если картинка была за экраном — подтяни в кадр и запиши обратно
-            const cur = itemsCache[id] || {};
-            const c = clampToFrame(id, Number(cur.x??0), Number(cur.y??0));
-            if (c.x !== cur.x || c.y !== cur.y) {
-              itemsCache[id] = { ...cur, x:c.x, y:c.y };
-              renderStyle(el, itemsCache[id]);
-              await update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
-            }
-          });
-        }
       }
 
       if (wantType==="yt"){
@@ -487,15 +486,11 @@
         el.src = it.url || "";
       }
 
-      // clamp for view + write back if needed
-      const c = clampToFrame(id, Number(it.x??0), Number(it.y??0));
-      if (c.x !== it.x || c.y !== it.y) {
-        it = { ...it, x: c.x, y: c.y };
-        itemsCache[id] = it;
-        update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
-      }
+      itemsCache[id] = it;
+      setStyle(el, it);
 
-      renderStyle(el, it);
+      // auto-fix if out of bounds (this is your “fix it”)
+      fixInside(id);
     }
 
     function prune(items){
@@ -509,32 +504,33 @@
       if (selectedId && !alive.has(selectedId)) select(null);
     }
 
-    // arrow nudge
+    // arrow nudge + clamp
     window.addEventListener("keydown", async (e) => {
       if (!selectedId) return;
       const step = e.shiftKey ? 10 : 1;
 
-      let dx = 0, dy = 0;
-      if (e.key === "ArrowLeft") dx = -step;
-      else if (e.key === "ArrowRight") dx = step;
-      else if (e.key === "ArrowUp") dy = -step;
-      else if (e.key === "ArrowDown") dy = step;
+      let dx=0, dy=0;
+      if (e.key==="ArrowLeft") dx=-step;
+      else if (e.key==="ArrowRight") dx=step;
+      else if (e.key==="ArrowUp") dy=-step;
+      else if (e.key==="ArrowDown") dy=step;
       else return;
 
       e.preventDefault();
-      const cur = itemsCache[selectedId] || {};
-      const nx = Number(cur.x ?? 0) + dx;
-      const ny = Number(cur.y ?? 0) + dy;
-      const c = clampToFrame(selectedId, nx, ny);
-
-      itemsCache[selectedId] = { ...cur, x:c.x, y:c.y };
-      await update(ref(db, `${basePath()}/${selectedId}`), { x:c.x, y:c.y });
-
       const el = els.get(selectedId);
-      if (el) renderStyle(el, itemsCache[selectedId]);
+      if (!el) return;
+
+      const cur = itemsCache[selectedId] || {};
+      const nx = Number(cur.x??0) + dx;
+      const ny = Number(cur.y??0) + dy;
+
+      const c = clampByRect(el, nx, ny);
+      itemsCache[selectedId] = { ...cur, x:c.x, y:c.y };
+      setStyle(el, itemsCache[selectedId]);
+      await update(ref(db, `${basePath()}/${selectedId}`), { x:c.x, y:c.y });
     });
 
-    let bound = false;
+    let bound=false;
     function bind(){
       stage.innerHTML="";
       els.clear();
@@ -544,12 +540,11 @@
       const r = ref(db, basePath());
       onValue(r, (snap)=>{
         const items = snap.val() || {};
-        itemsCache = items;
         for (const id of Object.keys(items)) upsert(id, items[id]);
         prune(items);
       });
 
-      bound = true;
+      bound=true;
     }
     if (!bound) bind();
   </script>
