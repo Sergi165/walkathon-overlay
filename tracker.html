@@ -316,12 +316,17 @@
       lastMapAt = 0;
     }
 
-    function setMap(lat, lon){
-      const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-      const now = Date.now();
-      if (key === lastMapKey && (now - lastMapAt) < 3000) return;
-      lastMapKey = key;
-      lastMapAt = now;
+function setMap(lat, lon){
+  const zoom = 16;
+  const src =
+    `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}` +
+    `&z=${zoom}` +
+    `&t=k` +              // k = satellite, h = hybrid
+    `&output=embed` +
+    `&hl=ru` +
+    `&_=${Date.now()}`;
+  mapFrame.src = src;
+}
 
       const zoom = 16;
       const src =
