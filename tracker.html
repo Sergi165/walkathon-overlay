@@ -7,8 +7,6 @@
 
   <script>
     const CHANNEL_NAME = "sergiei2";
-    const MESSAGE_LIFETIME = 15;
-    const MAX_MESSAGES = 5;
   </script>
 
   <style>
@@ -26,6 +24,9 @@
 
     .wrap { padding:12px; display:grid; gap:12px; }
     .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; }
+
+    .sticky-preview { position: sticky; top: 12px; z-index: 50; }
+
     .title { font-size:13px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; }
     .big { font-size:34px; font-weight:700; color:var(--green); line-height:1.1; }
     .muted { color:var(--muted); font-size:13px; }
@@ -45,7 +46,8 @@
     button.ok { background:#238636; }
     button:disabled { opacity:.55; cursor:not-allowed; }
 
-    /* compass + map */
+    .stream-preview { width:100%; aspect-ratio:16/9; border:0; border-radius:12px; background:#000; }
+
     .compass { display:flex; align-items:stretch; gap:12px; }
     .rose {
       width: 86px; height: 86px; border-radius: 50%;
@@ -85,6 +87,11 @@
 </head>
 <body>
   <div class="wrap">
+    <div class="card sticky-preview">
+      <div class="title">Stream Preview</div>
+      <iframe class="stream-preview" id="twitchPreview" allowfullscreen></iframe>
+    </div>
+
     <div class="card">
       <div class="title">Walkathon Tracker</div>
       <div class="big" id="done">0m</div>
@@ -93,22 +100,10 @@
       <div class="bar"><div class="fill" id="fill"></div></div>
 
       <div class="meta" style="margin-top:10px">
-        <div class="stat">
-          <div class="k">Status</div>
-          <div class="v" id="status">auth...</div>
-        </div>
-        <div class="stat">
-          <div class="k">Accuracy</div>
-          <div class="v" id="acc">-</div>
-        </div>
-        <div class="stat">
-          <div class="k">Speed</div>
-          <div class="v" id="speed">-</div>
-        </div>
-        <div class="stat">
-          <div class="k">Heading</div>
-          <div class="v" id="headingText">-</div>
-        </div>
+        <div class="stat"><div class="k">Status</div><div class="v" id="status">auth...</div></div>
+        <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">-</div></div>
+        <div class="stat"><div class="k">Speed</div><div class="v" id="speed">-</div></div>
+        <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
       </div>
 
       <div class="row" style="margin-top:12px">
@@ -127,7 +122,6 @@
           <div class="needle" id="needle"></div>
           <div class="n">N</div><div class="e">E</div><div class="s">S</div><div class="w">W</div>
         </div>
-
         <div class="mapWrap">
           <iframe class="mapFrame" id="mapFrame" src="about:blank" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
@@ -150,6 +144,11 @@
       messagingSenderId: "314823180241",
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
+
+    // Twitch preview (parent must match domain)
+    const parent = location.hostname;
+    document.getElementById("twitchPreview").src =
+      `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
     const MIN_ACCURACY = 35;
@@ -240,18 +239,13 @@
     }
 
     async function pushState(status, extra = {}) {
-      try {
-        if (!authed) await ensureAuth();
-        await update(stateRef, {
-          distanceMeters: Math.round(distanceMeters),
-          status,
-          updatedAt: Date.now(),
-          ...extra
-        });
-      } catch (e) {
-        console.log("pushState error", e);
-        statusEl.textContent = "db denied";
-      }
+      if (!authed) await ensureAuth();
+      await update(stateRef, {
+        distanceMeters: Math.round(distanceMeters),
+        status,
+        updatedAt: Date.now(),
+        ...extra
+      });
     }
 
     // Google Maps satellite
@@ -275,24 +269,15 @@
       const zoom = 16;
       const src =
         `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}` +
-        `&z=${zoom}` +
-        `&t=k` +              // satellite
-        `&output=embed` +
-        `&hl=ru` +
-        `&_=${now}`;
+        `&z=${zoom}&t=k&output=embed&hl=ru&_=${now}`;
 
       mapFrame.src = src;
       mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
     async function startGPS() {
-      try { if (!authed) await ensureAuth(); } catch {}
-      if (!authed) return;
-
-      if (!("geolocation" in navigator)) {
-        alert("Geolocation не поддерживается");
-        return;
-      }
+      if (!authed) await ensureAuth();
+      if (!("geolocation" in navigator)) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
       statusEl.textContent = "starting";
@@ -308,74 +293,38 @@
         }
 
         const point = { lat: latitude, lon: longitude };
-
         if (lastPoint) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
           if (step >= MIN_STEP_METERS && step <= MAX_STEP_METERS) distanceMeters += step;
         }
-
         lastPoint = point;
 
         updateUI({ status: "tracking", acc: accuracy, speed });
-        await pushState("tracking", {
-          accuracy,
-          speed: speed ?? 0,
-          latitude,
-          longitude
-        });
+        await pushState("tracking", { accuracy, speed: speed ?? 0, latitude, longitude });
 
         setMap(latitude, longitude);
       }, async (err) => {
         statusEl.textContent = "gps error";
         await pushState("gps error", { error: err.message || "unknown" });
-      }, {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 10000
-      });
+      }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
     }
 
     async function stopGPS() {
-      if (watchId != null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-      }
-
+      if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
       setMapBlank();
-
-      await pushState("stopped", {
-        latitude: null,
-        longitude: null,
-        accuracy: null,
-        speed: null
-      });
-
+      await pushState("stopped", { latitude: null, longitude: null, accuracy: null, speed: null });
       statusEl.textContent = "stopped";
     }
 
     async function resetGPS() {
       if (!confirm("Сбросить дистанцию и локацию?")) return;
-      distanceMeters = 0;
-      lastPoint = null;
+      distanceMeters = 0; lastPoint = null;
       updateUI({ status: "reset", acc: null, speed: null });
-
       setMapBlank();
-
-      try {
-        if (!authed) await ensureAuth();
-        await update(stateRef, {
-          distanceMeters: 0,
-          status: "reset",
-          updatedAt: Date.now(),
-          latitude: null,
-          longitude: null,
-          accuracy: null,
-          speed: null
-        });
-      } catch (e) {
-        console.log("resetGPS error", e);
-        statusEl.textContent = "db denied";
-      }
+      await update(stateRef, {
+        distanceMeters: 0, status: "reset", updatedAt: Date.now(),
+        latitude: null, longitude: null, accuracy: null, speed: null
+      });
     }
 
     startBtn.onclick = startGPS;
@@ -388,17 +337,13 @@
       const dirs = ["N","NE","E","SE","S","SW","W","NW"];
       return dirs[Math.round(deg / 45) % 8];
     }
-    let smoothHeading = 0;
-    let hasHeading = false;
+    let smoothHeading = 0, hasHeading = false;
     function angleDelta(a, b) { return (b - a + 540) % 360 - 180; }
 
     function setHeading(deg) {
       const target = ((deg % 360) + 360) % 360;
       if (!hasHeading) { smoothHeading = target; hasHeading = true; }
-      else {
-        const d = angleDelta(smoothHeading, target);
-        smoothHeading = (smoothHeading + d * 0.15 + 360) % 360;
-      }
+      else { const d = angleDelta(smoothHeading, target); smoothHeading = (smoothHeading + d * 0.15 + 360) % 360; }
       needleEl.style.transform = `translate(-50%, -100%) rotate(${smoothHeading}deg)`;
       headingTextEl.textContent = degToDir(smoothHeading);
     }
@@ -410,30 +355,17 @@
           const res = await DeviceOrientationEvent.requestPermission();
           if (res !== "granted") return;
         }
-
-        window.addEventListener("deviceorientationabsolute", (e) => {
-          if (typeof e.alpha === "number") setHeading(e.alpha);
-        }, true);
-
-        window.addEventListener("deviceorientation", (e) => {
-          if (typeof e.alpha === "number") setHeading(e.alpha);
-        }, true);
-      } catch (e) {
-        console.log("Compass init error", e);
-      }
+        window.addEventListener("deviceorientationabsolute", (e) => { if (typeof e.alpha === "number") setHeading(e.alpha); }, true);
+        window.addEventListener("deviceorientation", (e) => { if (typeof e.alpha === "number") setHeading(e.alpha); }, true);
+      } catch {}
     }
 
-    // Subscribe state (goal from DB, distance from DB)
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
       if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
 
-      updateUI({
-        status: s.status || "idle",
-        acc: s.accuracy ?? null,
-        speed: s.speed ?? null
-      });
+      updateUI({ status: s.status || "idle", acc: s.accuracy ?? null, speed: s.speed ?? null });
 
       if (typeof s.latitude === "number" && typeof s.longitude === "number") {
         setMap(s.latitude, s.longitude);
