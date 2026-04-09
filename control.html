@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Overlay Control (Auto Fix OOB)</title>
+  <title>Overlay Control</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 16px; }
     input, button, select { font-size: 14px; padding: 8px; }
@@ -11,6 +11,24 @@
     .card { border:1px solid #ddd; padding:10px; border-radius:10px; margin:10px 0; }
     .small { color:#666; font-size:12px; }
     label { font-size:12px; color:#333; display:flex; flex-direction:column; gap:4px; }
+    .hint{
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f6f7fb;
+      border: 1px solid #e3e6f0;
+      font-size: 12px;
+      color: #333;
+      line-height: 1.35;
+    }
+    kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      padding: 2px 6px;
+      border: 1px solid #ccc;
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: #fff;
+    }
 
     #viewport {
       width: 100%;
@@ -79,33 +97,16 @@
       z-index:2;
       pointer-events:none;
     }
-
-    .hint{
-      padding: 8px 10px;
-      border-radius: 10px;
-      background: #f6f7fb;
-      border: 1px solid #e3e6f0;
-      font-size: 12px;
-      color: #333;
-      line-height: 1.35;
-    }
-    kbd{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 11px;
-      padding: 2px 6px;
-      border: 1px solid #ccc;
-      border-bottom-width: 2px;
-      border-radius: 6px;
-      background: #fff;
-    }
   </style>
 </head>
 <body>
   <h2>Overlay Control</h2>
 
   <div class="card hint">
-    • Если элемент вылез за экран — он будет автоматически “поджат” внутрь 1920×1080 и x/y запишутся в Firebase.<br>
-    • Стрелки двигают выбранный элемент: 1px, <kbd>Shift</kbd>+стрелки: 10px.
+    <b>Версия:</b> control-build-1<br>
+    • <b>Clamp</b> = “забор”: ON → не даёт вылезать за 1920×1080, OFF → можешь вылезать как хочешь.<br>
+    • <b>Fix inside</b> — выправляет выбранный элемент внутрь кадра и пишет x/y в Firebase.<br>
+    • Стрелки двигают выбранный: 1px, <kbd>Shift</kbd>+стрелки: 10px.
   </div>
 
   <div class="card">
@@ -123,6 +124,18 @@
       <button id="loginBtn">Login</button>
       <button id="logoutBtn" disabled>Logout</button>
       <span id="authState" class="small"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <label style="flex-direction:row;align-items:center;gap:8px">
+        <input type="checkbox" id="clampToggle" checked />
+        Clamp (забор)
+      </label>
+
+      <button id="fixBtn" disabled>Fix inside</button>
+      <span class="small">Если что-то “наполовину за кадром” — выдели и жми Fix.</span>
     </div>
   </div>
 
@@ -202,6 +215,8 @@
     };
 
     const W = 1920, H = 1080;
+    const PREVIEW_OP_MIN = 0.2;
+
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
@@ -211,6 +226,7 @@
     const scene = $("scene");
     const stage = $("stage");
     const bgFrame = $("bgFrame");
+    const clampToggle = $("clampToggle");
 
     stage.addEventListener("dragstart",(e)=>e.preventDefault());
     viewport.addEventListener("dragstart",(e)=>e.preventDefault());
@@ -263,6 +279,7 @@
       $("op").disabled = !v;
       $("sc").disabled = !v;
       $("rt").disabled = !v;
+      $("fixBtn").disabled = !v;
     }
 
     function select(id){
@@ -286,6 +303,11 @@
       if (!selectedId) return;
       itemsCache[selectedId] = { ...(itemsCache[selectedId]||{}), ...patch };
       await update(ref(db, `${basePath()}/${selectedId}`), patch);
+
+      // если включён clamp и меняли scale/rotate — можно поправить внутрь
+      if (clampToggle.checked && (patch.scale != null || patch.rotate != null)) {
+        await fixInside(selectedId);
+      }
     }
 
     $("layerSel").addEventListener("change",()=>patchSelected({layer:$("layerSel").value}));
@@ -365,6 +387,7 @@
         f.style.height = "100%";
         f.style.pointerEvents = "none";
         box.appendChild(f);
+
         return box;
       }
       const img = document.createElement("img");
@@ -373,7 +396,7 @@
       return img;
     }
 
-    function setStyle(el, it){
+    function renderStyle(el, it){
       const x = Number(it.x ?? 0);
       const y = Number(it.y ?? 0);
       const s = Number(it.scale ?? 1);
@@ -382,55 +405,61 @@
       const hidden = it.hidden === true;
 
       el.style.display = hidden ? "none" : "block";
-      el.style.opacity = String(hidden ? 0 : Math.max(o, 0.2));
+      el.style.opacity = String(hidden ? 0 : Math.max(o, PREVIEW_OP_MIN));
       el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
 
       if (it.w && it.h){ el.style.width = Number(it.w)+"px"; el.style.height = Number(it.h)+"px"; }
       else { el.style.width=""; el.style.height=""; }
     }
 
-    // --- REAL clamp using DOMRect (works for any image size) ---
-    function clampByRect(el, x, y){
-      // set temp position
-      const it = itemsCache[el.dataset.id] || {};
+    // правильный clamp по реальным размерам DOM (offset) × scale
+    function clampXY(id, x, y){
+      const it = itemsCache[id] || {};
+      const el = els.get(id);
       const s = Number(it.scale ?? 1);
-      const r = Number(it.rotate ?? 0);
-      const o = Number(it.opacity ?? 1);
-      el.style.opacity = String(Math.max(o, 0.2));
-      el.style.transform = `translate(${x}px, ${y}px) scale(${s}) rotate(${r}deg)`;
 
-      // measure
-      const vr = viewport.getBoundingClientRect();
-      const er = el.getBoundingClientRect();
-      const scale = getScale();
+      let baseW = 200, baseH = 200;
 
-      const left = (er.left - vr.left) / scale;
-      const top  = (er.top  - vr.top)  / scale;
-      const right = left + (er.width / scale);
-      const bottom = top + (er.height / scale);
+      if (it.type === "yt") {
+        baseW = Number(it.w || 560);
+        baseH = Number(it.h || 315);
+      } else if (el) {
+        // offsetWidth/Height = базовый размер без transform scale
+        baseW = el.offsetWidth || baseW;
+        baseH = el.offsetHeight || baseH;
+      }
 
-      let dx = 0, dy = 0;
-      if (left < 0) dx += -left;
-      if (top < 0) dy += -top;
-      if (right > W) dx += (W - right);
-      if (bottom > H) dy += (H - bottom);
+      const w = baseW * s;
+      const h = baseH * s;
 
-      return { x: Math.round(x + dx), y: Math.round(y + dy) };
+      const maxX = Math.max(0, W - w);
+      const maxY = Math.max(0, H - h);
+
+      return {
+        x: Math.round(Math.min(Math.max(x, 0), maxX)),
+        y: Math.round(Math.min(Math.max(y, 0), maxY))
+      };
     }
 
     async function fixInside(id){
-      const el = els.get(id);
-      if (!el) return;
       const cur = itemsCache[id] || {};
       const x0 = Number(cur.x ?? 0);
       const y0 = Number(cur.y ?? 0);
-      const c = clampByRect(el, x0, y0);
-      if (c.x !== x0 || c.y !== y0) {
-        itemsCache[id] = { ...cur, x: c.x, y: c.y };
-        setStyle(el, itemsCache[id]);
-        await update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
-      }
+
+      const c = clampXY(id, x0, y0);
+      if (c.x === x0 && c.y === y0) return;
+
+      itemsCache[id] = { ...cur, x: c.x, y: c.y };
+      const el = els.get(id);
+      if (el) renderStyle(el, itemsCache[id]);
+
+      await update(ref(db, `${basePath()}/${id}`), { x: c.x, y: c.y });
     }
+
+    $("fixBtn").onclick = async ()=> {
+      if (!selectedId) return;
+      await fixInside(selectedId);
+    };
 
     function attachDrag(el, id){
       let drag = null;
@@ -448,12 +477,16 @@
         drag.dx = (e.clientX - drag.sx) / drag.scale;
         drag.dy = (e.clientY - drag.sy) / drag.scale;
 
-        const nx = Math.round(drag.bx + drag.dx);
-        const ny = Math.round(drag.by + drag.dy);
+        let nx = Math.round(drag.bx + drag.dx);
+        let ny = Math.round(drag.by + drag.dy);
 
-        const c = clampByRect(el, nx, ny);
-        itemsCache[id] = { ...(itemsCache[id]||{}), x:c.x, y:c.y };
-        setStyle(el, itemsCache[id]);
+        if (clampToggle.checked) {
+          const c = clampXY(id, nx, ny);
+          nx = c.x; ny = c.y;
+        }
+
+        itemsCache[id] = { ...(itemsCache[id]||{}), x:nx, y:ny };
+        renderStyle(el, itemsCache[id]);
       });
 
       el.addEventListener("pointerup", async ()=>{
@@ -472,7 +505,6 @@
         if (el) el.remove();
         el = makeEl(it);
         el.dataset.type = wantType;
-        el.dataset.id = id;
         els.set(id, el);
         stage.appendChild(el);
         attachDrag(el, id);
@@ -487,10 +519,22 @@
       }
 
       itemsCache[id] = it;
-      setStyle(el, it);
 
-      // auto-fix if out of bounds (this is your “fix it”)
-      fixInside(id);
+      // если clamp включён — сразу фикснем OOB (но не телепортируем при drag, только при апдейте)
+      if (clampToggle.checked) {
+        const c = clampXY(id, Number(it.x??0), Number(it.y??0));
+        if (c.x !== it.x || c.y !== it.y) {
+          itemsCache[id] = { ...it, x:c.x, y:c.y };
+          update(ref(db, `${basePath()}/${id}`), { x:c.x, y:c.y });
+        }
+      }
+
+      renderStyle(el, itemsCache[id]);
+
+      // для картинок после загрузки — пересчитать размеры и фикснуть
+      if (wantType==="img") {
+        el.onload = () => { if (clampToggle.checked) fixInside(id); };
+      }
     }
 
     function prune(items){
@@ -504,7 +548,7 @@
       if (selectedId && !alive.has(selectedId)) select(null);
     }
 
-    // arrow nudge + clamp
+    // arrow nudge (with optional clamp)
     window.addEventListener("keydown", async (e) => {
       if (!selectedId) return;
       const step = e.shiftKey ? 10 : 1;
@@ -517,17 +561,19 @@
       else return;
 
       e.preventDefault();
-      const el = els.get(selectedId);
-      if (!el) return;
-
       const cur = itemsCache[selectedId] || {};
-      const nx = Number(cur.x??0) + dx;
-      const ny = Number(cur.y??0) + dy;
+      let nx = Number(cur.x??0) + dx;
+      let ny = Number(cur.y??0) + dy;
 
-      const c = clampByRect(el, nx, ny);
-      itemsCache[selectedId] = { ...cur, x:c.x, y:c.y };
-      setStyle(el, itemsCache[selectedId]);
-      await update(ref(db, `${basePath()}/${selectedId}`), { x:c.x, y:c.y });
+      if (clampToggle.checked) {
+        const c = clampXY(selectedId, nx, ny);
+        nx = c.x; ny = c.y;
+      }
+
+      itemsCache[selectedId] = { ...cur, x:nx, y:ny };
+      const el = els.get(selectedId);
+      if (el) renderStyle(el, itemsCache[selectedId]);
+      await update(ref(db, `${basePath()}/${selectedId}`), { x:nx, y:ny });
     });
 
     let bound=false;
