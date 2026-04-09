@@ -7,12 +7,8 @@
 
   <script>
     const CHANNEL_NAME = "sergiei2";
-    const MESSAGE_LIFETIME = 60;
+    const MESSAGE_LIFETIME = 15;
     const MAX_MESSAGES = 5;
-
-    // IMPORTANT: parent= должен совпадать с доменом, где лежит tracker.html
-    // Если у тебя другой GitHub Pages домен — поменяй ниже в iframe src.
-    const TWITCH_PARENT = "sergi165.github.io";
   </script>
 
   <style>
@@ -27,13 +23,13 @@
     }
     * { box-sizing: border-box; }
     html, body { margin:0; background:var(--bg); color:var(--white); font-family: Arial, sans-serif; }
+
     .wrap { padding:12px; display:grid; gap:12px; }
     .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; }
-    .sticky-preview { position: sticky; top: 12px; z-index: 50; }
     .title { font-size:13px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; }
     .big { font-size:34px; font-weight:700; color:var(--green); line-height:1.1; }
-    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .muted { color:var(--muted); font-size:13px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
     .meta { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     .stat { background: rgba(255,255,255,.03); border:1px solid var(--line); border-radius:12px; padding:10px; }
@@ -49,9 +45,7 @@
     button.ok { background:#238636; }
     button:disabled { opacity:.55; cursor:not-allowed; }
 
-    .stream-preview { width:100%; aspect-ratio:16/9; border:0; border-radius:12px; background:#000; }
-
-    /* Compass + Map */
+    /* compass + map */
     .compass { display:flex; align-items:stretch; gap:12px; }
     .rose {
       width: 86px; height: 86px; border-radius: 50%;
@@ -80,45 +74,17 @@
     .mapWrap{
       flex: 1 1 auto;
       min-width: 240px;
-      height: 160px;
+      height: 170px;
       border-radius: 12px;
       overflow: hidden;
       border: 1px solid var(--line);
       background:#000;
     }
     .mapFrame{ width:100%; height:100%; border:0; }
-
-    /* Chat */
-    .chat-status { color:var(--muted); font-size:12px; margin-bottom:8px; }
-    #chat { display:flex; flex-direction:column-reverse; gap:6px; max-height:420px; overflow:hidden; }
-    .message {
-      padding:6px 8px;
-      border-radius:8px;
-      background: rgba(255,255,255,.05);
-      font-size:16px;
-      line-height:1.3;
-      opacity:0;
-      animation: fadeIn .2s forwards;
-      word-wrap: break-word;
-    }
-    .message.fade-out { animation: fadeOut .4s forwards; }
-    .username { font-weight:700; margin-right:6px; }
-
-    @keyframes fadeIn { from {opacity:0; transform: translateY(6px)} to {opacity:1; transform: translateY(0)} }
-    @keyframes fadeOut { from {opacity:1; transform: translateY(0)} to {opacity:0; transform: translateY(-6px)} }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card sticky-preview">
-      <div class="title">Stream Preview — sergiei2</div>
-      <iframe
-        class="stream-preview"
-        id="twitchPreview"
-        allowfullscreen>
-      </iframe>
-    </div>
-
     <div class="card">
       <div class="title">Walkathon Tracker</div>
       <div class="big" id="done">0m</div>
@@ -155,7 +121,7 @@
     </div>
 
     <div class="card">
-      <div class="title">Compass + Google Map</div>
+      <div class="title">Compass + Google Maps (Satellite)</div>
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
@@ -163,22 +129,10 @@
         </div>
 
         <div class="mapWrap">
-          <iframe
-            class="mapFrame"
-            id="mapFrame"
-            src="about:blank"
-            loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade">
-          </iframe>
+          <iframe class="mapFrame" id="mapFrame" src="about:blank" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
       </div>
       <div class="muted" style="margin-top:8px" id="mapInfo">Map: idle</div>
-    </div>
-
-    <div class="card">
-      <div class="title">Twitch Chat — sergiei2</div>
-      <div class="chat-status" id="chatStatus">starting...</div>
-      <div id="chat"></div>
     </div>
   </div>
 
@@ -202,10 +156,6 @@
     const MIN_STEP_METERS = 5;
     const MAX_STEP_METERS = 120;
 
-    // Twitch preview src with parent
-    document.getElementById("twitchPreview").src =
-      `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(TWITCH_PARENT)}&muted=true`;
-
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
@@ -228,7 +178,6 @@
     const mapInfo  = document.getElementById("mapInfo");
 
     let authed = false;
-
     function setBtnsEnabled(v){
       startBtn.disabled = !v;
       stopBtn.disabled  = !v;
@@ -305,7 +254,7 @@
       }
     }
 
-    // ===== Google Maps embed =====
+    // Google Maps satellite
     let lastMapKey = "";
     let lastMapAt = 0;
 
@@ -316,26 +265,20 @@
       lastMapAt = 0;
     }
 
-function setMap(lat, lon){
-  const zoom = 16;
-  const src =
-    `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}` +
-    `&z=${zoom}` +
-    `&t=k` +              // k = satellite, h = hybrid
-    `&output=embed` +
-    `&hl=ru` +
-    `&_=${Date.now()}`;
-  mapFrame.src = src;
-}
+    function setMap(lat, lon){
+      const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+      const now = Date.now();
+      if (key === lastMapKey && (now - lastMapAt) < 3000) return;
+      lastMapKey = key;
+      lastMapAt = now;
 
       const zoom = 16;
       const src =
-        `https://www.google.com/maps` +
-        `?q=${encodeURIComponent(lat + "," + lon)}` +
+        `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}` +
         `&z=${zoom}` +
+        `&t=k` +              // satellite
         `&output=embed` +
         `&hl=ru` +
-        `&t=m` +
         `&_=${now}`;
 
       mapFrame.src = src;
@@ -439,16 +382,14 @@ function setMap(lat, lon){
     stopBtn.onclick  = stopGPS;
     resetBtn.onclick = resetGPS;
 
-    // ===== Compass (needle + short text only) =====
+    // Compass
     const needleEl = document.getElementById("needle");
-
     function degToDir(deg) {
       const dirs = ["N","NE","E","SE","S","SW","W","NW"];
       return dirs[Math.round(deg / 45) % 8];
     }
     let smoothHeading = 0;
     let hasHeading = false;
-
     function angleDelta(a, b) { return (b - a + 540) % 360 - 180; }
 
     function setHeading(deg) {
@@ -458,7 +399,6 @@ function setMap(lat, lon){
         const d = angleDelta(smoothHeading, target);
         smoothHeading = (smoothHeading + d * 0.15 + 360) % 360;
       }
-
       needleEl.style.transform = `translate(-50%, -100%) rotate(${smoothHeading}deg)`;
       headingTextEl.textContent = degToDir(smoothHeading);
     }
@@ -500,108 +440,8 @@ function setMap(lat, lon){
       }
     });
 
-    // ===== Twitch Chat =====
-    const chatEl = document.getElementById("chat");
-    const chatStatusEl = document.getElementById("chatStatus");
-
-    function setChatStatus(text) { chatStatusEl.textContent = text; }
-
-    function addMessage(username, text, color) {
-      const msg = document.createElement("div");
-      msg.className = "message";
-
-      const nameSpan = document.createElement("span");
-      nameSpan.className = "username";
-      nameSpan.textContent = username + ":";
-      if (color) nameSpan.style.color = color;
-      msg.appendChild(nameSpan);
-
-      const textSpan = document.createElement("span");
-      textSpan.textContent = text;
-      msg.appendChild(textSpan);
-
-      chatEl.prepend(msg);
-      while (chatEl.children.length > MAX_MESSAGES) chatEl.lastChild.remove();
-
-      setTimeout(() => {
-        msg.classList.add("fade-out");
-        setTimeout(() => msg.remove(), 400);
-      }, MESSAGE_LIFETIME * 1000);
-    }
-
-    let ws;
-
-    function connectTwitch() {
-      if (!CHANNEL_NAME) { setChatStatus("channel not set"); return; }
-
-      const nick = "justinfan" + Math.floor(Math.random() * 80000 + 1000);
-      ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
-
-      ws.addEventListener("open", () => {
-        setChatStatus("connected");
-        ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership\r\n");
-        ws.send("NICK " + nick + "\r\n");
-        ws.send("JOIN #" + CHANNEL_NAME.toLowerCase() + "\r\n");
-      });
-
-      ws.addEventListener("message", (event) => {
-        const lines = event.data.split("\r\n");
-        for (const line of lines) {
-          if (!line) continue;
-          if (line.startsWith("PING")) { ws.send("PONG :tmi.twitch.tv\r\n"); continue; }
-          handleIrcLine(line);
-        }
-      });
-
-      ws.addEventListener("close", () => {
-        setChatStatus("reconnecting in 5s...");
-        setTimeout(connectTwitch, 5000);
-      });
-
-      ws.addEventListener("error", () => {
-        setChatStatus("socket error");
-        ws.close();
-      });
-    }
-
-    function handleIrcLine(line) {
-      let tags = {};
-      let rest = line;
-
-      if (rest.startsWith("@")) {
-        const spaceIdx = rest.indexOf(" ");
-        const tagStr = rest.slice(1, spaceIdx);
-        rest = rest.slice(spaceIdx + 1);
-        tagStr.split(";").forEach(part => {
-          const [k, v] = part.split("=");
-          tags[k] = v || "";
-        });
-      }
-
-      if (!rest.startsWith(":")) return;
-
-      const prefixEnd = rest.indexOf(" ");
-      const prefix = rest.slice(1, prefixEnd);
-      rest = rest.slice(prefixEnd + 1);
-
-      const spaceIdx = rest.indexOf(" ");
-      const command = rest.slice(0, spaceIdx);
-      const params = rest.slice(spaceIdx + 1);
-
-      if (command === "PRIVMSG") {
-        const msgIdx = params.indexOf(" :");
-        if (msgIdx === -1) return;
-
-        const text = params.slice(msgIdx + 2).slice(0, 350);
-        const username = (tags["display-name"] || prefix.split("!")[0]) || "user";
-        const color = tags["color"] || "#ffffff";
-        addMessage(username, text, color);
-      }
-    }
-
     initCompass();
     updateUI({ status: "idle" });
-    connectTwitch();
   </script>
 </body>
 </html>
