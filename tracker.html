@@ -9,6 +9,10 @@
     const CHANNEL_NAME = "sergiei2";
     const MESSAGE_LIFETIME = 60;
     const MAX_MESSAGES = 5;
+
+    // IMPORTANT: parent= должен совпадать с доменом, где лежит tracker.html
+    // Если у тебя другой GitHub Pages домен — поменяй ниже в iframe src.
+    const TWITCH_PARENT = "sergi165.github.io";
   </script>
 
   <style>
@@ -22,86 +26,86 @@
       --white:#fff;
     }
     * { box-sizing: border-box; }
-
-    html, body { margin: 0; background: var(--bg); color: var(--white); font-family: Arial, sans-serif; }
-    .wrap { padding: 12px; display: grid; gap: 12px; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+    html, body { margin:0; background:var(--bg); color:var(--white); font-family: Arial, sans-serif; }
+    .wrap { padding:12px; display:grid; gap:12px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; }
     .sticky-preview { position: sticky; top: 12px; z-index: 50; }
+    .title { font-size:13px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; }
+    .big { font-size:34px; font-weight:700; color:var(--green); line-height:1.1; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .muted { color:var(--muted); font-size:13px; }
 
-    .title { font-size: 13px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
-    .big { font-size: 34px; font-weight: 700; color: var(--green); line-height: 1.1; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .meta { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .stat { background: rgba(255,255,255,.03); border:1px solid var(--line); border-radius:12px; padding:10px; }
+    .stat .k { color:var(--muted); font-size:12px; margin-bottom:4px; }
+    .stat .v { font-size:18px; font-weight:700; }
 
-    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .stat { background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
-    .stat .k { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-    .stat .v { font-size: 18px; font-weight: 700; }
+    .bar { margin-top:10px; height:18px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; }
+    .fill { width:0%; height:100%; background:linear-gradient(90deg,var(--green),var(--green2)); transition: width .35s ease; }
 
-    .bar { margin-top: 10px; height: 18px; background: rgba(255,255,255,.08); border-radius: 999px; overflow: hidden; }
-    .fill { width: 0%; height: 100%; background: linear-gradient(90deg, var(--green), var(--green2)); transition: width .35s ease; }
+    button { border:0; border-radius:10px; padding:12px 14px; color:white; font-weight:700; background:#252a35; cursor:pointer; }
+    button.primary { background:#1f6feb; }
+    button.danger { background:#d73a49; }
+    button.ok { background:#238636; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
 
-    button { border: 0; border-radius: 10px; padding: 12px 14px; color: white; font-weight: 700; background: #252a35; cursor: pointer; }
-    button.primary { background: #1f6feb; }
-    button.danger { background: #d73a49; }
-    button.ok { background: #238636; }
-    button:disabled { opacity: .55; cursor: not-allowed; }
+    .stream-preview { width:100%; aspect-ratio:16/9; border:0; border-radius:12px; background:#000; }
 
-    /* COMPASS + MAP */
-    .compass { display: flex; align-items: center; gap: 12px; }
-
+    /* Compass + Map */
+    .compass { display:flex; align-items:stretch; gap:12px; }
     .rose {
       width: 86px; height: 86px; border-radius: 50%;
-      border: 2px solid var(--line); position: relative;
+      border: 2px solid var(--line);
+      position: relative;
       background: radial-gradient(circle at center, #1c2130, #11151d);
       flex: 0 0 auto;
+      margin-top: 2px;
     }
     .needle {
-      position: absolute; left: 50%; top: 50%;
-      width: 4px; height: 34px;
-      background: linear-gradient(180deg, #ff4d4d, #fff);
+      position:absolute; left:50%; top:50%;
+      width:4px; height:34px;
+      background: linear-gradient(180deg,#ff4d4d,#fff);
       transform-origin: center 26px;
       transform: translate(-50%, -100%) rotate(0deg);
-      border-radius: 4px;
+      border-radius:4px;
     }
-    .rose .n, .rose .e, .rose .s, .rose .w { position: absolute; font-size: 12px; color: var(--muted); font-weight: 700; }
-    .rose .n { left: 50%; top: 4px; transform: translateX(-50%); color: #ff7b7b; }
-    .rose .s { left: 50%; bottom: 4px; transform: translateX(-50%); }
-    .rose .e { right: 6px; top: 50%; transform: translateY(-50%); }
-    .rose .w { left: 6px; top: 50%; transform: translateY(-50%); }
+    .rose .n, .rose .e, .rose .s, .rose .w {
+      position:absolute; font-size:12px; color:var(--muted); font-weight:700;
+    }
+    .rose .n { left:50%; top:4px; transform:translateX(-50%); color:#ff7b7b; }
+    .rose .s { left:50%; bottom:4px; transform:translateX(-50%); }
+    .rose .e { right:6px; top:50%; transform:translateY(-50%); }
+    .rose .w { left:6px; top:50%; transform:translateY(-50%); }
 
     .mapWrap{
       flex: 1 1 auto;
-      min-width: 220px;
-      height: 140px;
+      min-width: 240px;
+      height: 160px;
       border-radius: 12px;
       overflow: hidden;
       border: 1px solid var(--line);
-      background: #000;
+      background:#000;
     }
-    .mapFrame{
-      width:100%;
-      height:100%;
-      border:0;
-    }
+    .mapFrame{ width:100%; height:100%; border:0; }
 
-    .muted { color: var(--muted); font-size: 13px; }
-    .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-
-    #chat { display: flex; flex-direction: column-reverse; gap: 6px; max-height: 420px; overflow: hidden; }
+    /* Chat */
+    .chat-status { color:var(--muted); font-size:12px; margin-bottom:8px; }
+    #chat { display:flex; flex-direction:column-reverse; gap:6px; max-height:420px; overflow:hidden; }
     .message {
-      padding: 6px 8px; border-radius: 8px;
+      padding:6px 8px;
+      border-radius:8px;
       background: rgba(255,255,255,.05);
-      color: #fff; font-size: 16px; line-height: 1.3;
-      opacity: 0; animation: fadeIn 0.2s forwards;
-      max-width: 100%; word-wrap: break-word;
+      font-size:16px;
+      line-height:1.3;
+      opacity:0;
+      animation: fadeIn .2s forwards;
+      word-wrap: break-word;
     }
-    .message.fade-out { animation: fadeOut 0.4s forwards; }
-    .username { font-weight: 700; margin-right: 6px; }
+    .message.fade-out { animation: fadeOut .4s forwards; }
+    .username { font-weight:700; margin-right:6px; }
 
-    .stream-preview { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 12px; background: #000; }
-
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+    @keyframes fadeIn { from {opacity:0; transform: translateY(6px)} to {opacity:1; transform: translateY(0)} }
+    @keyframes fadeOut { from {opacity:1; transform: translateY(0)} to {opacity:0; transform: translateY(-6px)} }
   </style>
 </head>
 <body>
@@ -110,7 +114,7 @@
       <div class="title">Stream Preview — sergiei2</div>
       <iframe
         class="stream-preview"
-        src="https://player.twitch.tv/?channel=sergiei2&parent=sergi165.github.io&muted=true"
+        id="twitchPreview"
         allowfullscreen>
       </iframe>
     </div>
@@ -119,6 +123,7 @@
       <div class="title">Walkathon Tracker</div>
       <div class="big" id="done">0m</div>
       <div class="muted" id="left">LEFT: 0m</div>
+
       <div class="bar"><div class="fill" id="fill"></div></div>
 
       <div class="meta" style="margin-top:10px">
@@ -150,7 +155,7 @@
     </div>
 
     <div class="card">
-      <div class="title">Compass + Map</div>
+      <div class="title">Compass + Google Map</div>
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
@@ -158,7 +163,13 @@
         </div>
 
         <div class="mapWrap">
-          <iframe class="mapFrame" id="mapFrame" src="about:blank"></iframe>
+          <iframe
+            class="mapFrame"
+            id="mapFrame"
+            src="about:blank"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade">
+          </iframe>
         </div>
       </div>
       <div class="muted" style="margin-top:8px" id="mapInfo">Map: idle</div>
@@ -191,6 +202,10 @@
     const MIN_STEP_METERS = 5;
     const MAX_STEP_METERS = 120;
 
+    // Twitch preview src with parent
+    document.getElementById("twitchPreview").src =
+      `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(TWITCH_PARENT)}&muted=true`;
+
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
@@ -202,6 +217,7 @@
     const statusEl = document.getElementById("status");
     const accEl = document.getElementById("acc");
     const speedEl = document.getElementById("speed");
+    const headingTextEl = document.getElementById("headingText");
     const authInfoEl = document.getElementById("authInfo");
 
     const startBtn = document.getElementById("startBtn");
@@ -209,9 +225,10 @@
     const resetBtn = document.getElementById("resetBtn");
 
     const mapFrame = document.getElementById("mapFrame");
-    const mapInfo = document.getElementById("mapInfo");
+    const mapInfo  = document.getElementById("mapInfo");
 
     let authed = false;
+
     function setBtnsEnabled(v){
       startBtn.disabled = !v;
       stopBtn.disabled  = !v;
@@ -239,8 +256,7 @@
       statusEl.textContent = "auth error";
     });
 
-    // always meters
-    function fmtMeters(m) { return Math.round(Number(m || 0)) + "m"; }
+    function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
     let watchId = null;
     let lastPoint = null;
@@ -289,7 +305,7 @@
       }
     }
 
-    // ===== Map =====
+    // ===== Google Maps embed =====
     let lastMapKey = "";
     let lastMapAt = 0;
 
@@ -301,23 +317,21 @@
     }
 
     function setMap(lat, lon){
-      const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+      const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
       const now = Date.now();
-      // обновляем не чаще чем раз в 5 сек и если точка не сменилась
-      if (key === lastMapKey && (now - lastMapAt) < 5000) return;
+      if (key === lastMapKey && (now - lastMapAt) < 3000) return;
       lastMapKey = key;
       lastMapAt = now;
 
-      const d = 0.01; // bbox half-size (примерно масштаб)
-      const left = lon - d;
-      const bottom = lat - d;
-      const right = lon + d;
-      const top = lat + d;
-
+      const zoom = 16;
       const src =
-        "https://www.openstreetmap.org/export/embed.html" +
-        `?bbox=${encodeURIComponent(left + "," + bottom + "," + right + "," + top)}` +
-        `&layer=mapnik&marker=${encodeURIComponent(lat + "," + lon)}`;
+        `https://www.google.com/maps` +
+        `?q=${encodeURIComponent(lat + "," + lon)}` +
+        `&z=${zoom}` +
+        `&output=embed` +
+        `&hl=ru` +
+        `&t=m` +
+        `&_=${now}`;
 
       mapFrame.src = src;
       mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
@@ -341,7 +355,6 @@
         if (accuracy && accuracy > MIN_ACCURACY) {
           updateUI({ status: "weak gps", acc: accuracy, speed });
           await pushState("weak gps", { accuracy, latitude, longitude, speed: speed ?? 0 });
-          // карту можно всё равно обновлять даже при weak gps, но оставим так:
           setMap(latitude, longitude);
           return;
         }
@@ -364,7 +377,6 @@
         });
 
         setMap(latitude, longitude);
-
       }, async (err) => {
         statusEl.textContent = "gps error";
         await pushState("gps error", { error: err.message || "unknown" });
@@ -422,9 +434,8 @@
     stopBtn.onclick  = stopGPS;
     resetBtn.onclick = resetGPS;
 
-    // ===== Compass (needle + headingText stat) =====
+    // ===== Compass (needle + short text only) =====
     const needleEl = document.getElementById("needle");
-    const headingTextEl = document.getElementById("headingText");
 
     function degToDir(deg) {
       const dirs = ["N","NE","E","SE","S","SW","W","NW"];
@@ -432,12 +443,16 @@
     }
     let smoothHeading = 0;
     let hasHeading = false;
+
     function angleDelta(a, b) { return (b - a + 540) % 360 - 180; }
 
     function setHeading(deg) {
       const target = ((deg % 360) + 360) % 360;
       if (!hasHeading) { smoothHeading = target; hasHeading = true; }
-      else { const d = angleDelta(smoothHeading, target); smoothHeading = (smoothHeading + d * 0.15 + 360) % 360; }
+      else {
+        const d = angleDelta(smoothHeading, target);
+        smoothHeading = (smoothHeading + d * 0.15 + 360) % 360;
+      }
 
       needleEl.style.transform = `translate(-50%, -100%) rotate(${smoothHeading}deg)`;
       headingTextEl.textContent = degToDir(smoothHeading);
@@ -475,7 +490,6 @@
         speed: s.speed ?? null
       });
 
-      // если координаты есть — карта подхватит даже если трекер перезапустился
       if (typeof s.latitude === "number" && typeof s.longitude === "number") {
         setMap(s.latitude, s.longitude);
       }
@@ -484,6 +498,7 @@
     // ===== Twitch Chat =====
     const chatEl = document.getElementById("chat");
     const chatStatusEl = document.getElementById("chatStatus");
+
     function setChatStatus(text) { chatStatusEl.textContent = text; }
 
     function addMessage(username, text, color) {
@@ -510,6 +525,7 @@
     }
 
     let ws;
+
     function connectTwitch() {
       if (!CHANNEL_NAME) { setChatStatus("channel not set"); return; }
 
@@ -532,8 +548,15 @@
         }
       });
 
-      ws.addEventListener("close", () => { setChatStatus("reconnecting in 5s..."); setTimeout(connectTwitch, 5000); });
-      ws.addEventListener("error", () => { setChatStatus("socket error"); ws.close(); });
+      ws.addEventListener("close", () => {
+        setChatStatus("reconnecting in 5s...");
+        setTimeout(connectTwitch, 5000);
+      });
+
+      ws.addEventListener("error", () => {
+        setChatStatus("socket error");
+        ws.close();
+      });
     }
 
     function handleIrcLine(line) {
@@ -544,7 +567,10 @@
         const spaceIdx = rest.indexOf(" ");
         const tagStr = rest.slice(1, spaceIdx);
         rest = rest.slice(spaceIdx + 1);
-        tagStr.split(";").forEach(part => { const [k, v] = part.split("="); tags[k] = v || ""; });
+        tagStr.split(";").forEach(part => {
+          const [k, v] = part.split("=");
+          tags[k] = v || "";
+        });
       }
 
       if (!rest.startsWith(":")) return;
