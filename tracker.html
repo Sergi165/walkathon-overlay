@@ -186,7 +186,7 @@
 
     const DEFAULT_GOAL_METERS = 25000;
     const MIN_ACCURACY = 35;
-    const MIN_STEP_METERS = 5;
+    const MIN_STEP_METERS = 2;
     const MAX_STEP_METERS = 120;
 
     const app = initializeApp(firebaseConfig);
@@ -350,6 +350,7 @@
     let lastPoint = null;
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
+    let lastUpdateTime = 0;
 
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
@@ -421,34 +422,63 @@
       if (watchId != null) return;
 
       statusEl.textContent = "starting";
+      lastPoint = null;
+      lastUpdateTime = 0;
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
         const { latitude, longitude, accuracy, speed } = pos.coords;
+        const now = Date.now();
+
+        setMap(latitude, longitude);
 
         if (accuracy && accuracy > MIN_ACCURACY) {
           updateUI({ status: "weak gps", acc: accuracy, speed });
-          await pushState("weak gps", { accuracy, latitude, longitude, speed: speed ?? 0 });
-          setMap(latitude, longitude);
+          
+          if (now - lastUpdateTime > 2000) {
+            await pushState("weak gps", { accuracy, latitude, longitude, speed: speed ?? 0 });
+            lastUpdateTime = now;
+          }
           return;
         }
 
-        const point = { lat: latitude, lon: longitude };
+        const point = { lat: latitude, lon: longitude, time: now };
 
         if (lastPoint) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
-          if (step >= MIN_STEP_METERS && step <= MAX_STEP_METERS) distanceMeters += step;
+          const timeDiff = (now - lastPoint.time) / 1000;
+          
+          const calculatedSpeed = timeDiff > 0 ? step / timeDiff : 0;
+          
+          if (step >= MIN_STEP_METERS && step <= MAX_STEP_METERS) {
+            if (calculatedSpeed < 15 || timeDiff > 5) {
+              distanceMeters += step;
+              console.log(`✓ Добавлено: ${step.toFixed(2)}м, скорость: ${(calculatedSpeed * 3.6).toFixed(1)} км/ч`);
+            } else {
+              console.log(`✗ Пропущено (слишком быстро): ${step.toFixed(2)}м за ${timeDiff.toFixed(1)}с`);
+            }
+          } else if (step > 0) {
+            console.log(`✗ Пропущено (вне диапазона): ${step.toFixed(2)}м`);
+          }
         }
 
         lastPoint = point;
 
         updateUI({ status: "tracking", acc: accuracy, speed });
-        await pushState("tracking", { accuracy, speed: speed ?? 0, latitude, longitude });
+        
+        if (now - lastUpdateTime > 1000) {
+          await pushState("tracking", { accuracy, speed: speed ?? 0, latitude, longitude });
+          lastUpdateTime = now;
+        }
 
-        setMap(latitude, longitude);
       }, async (err) => {
+        console.error("GPS error:", err);
         statusEl.textContent = "gps error";
         await pushState("gps error", { error: err.message || "unknown" });
-      }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
+      }, { 
+        enableHighAccuracy: true, 
+        maximumAge: 0,
+        timeout: 15000
+      });
     }
 
     async function stopGPS() {
