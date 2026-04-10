@@ -107,9 +107,125 @@
 
     @keyframes fadeIn { from {opacity:0; transform:translateY(6px)} to {opacity:1; transform:translateY(0)} }
     @keyframes fadeOut { from {opacity:1; transform:translateY(0)} to {opacity:0; transform:translateY(-6px)} }
+
+    /* CHAT FULLSCREEN MODE */
+    .chat-card { cursor: pointer; transition: all 0.3s ease; }
+    .chat-card:hover { transform: scale(1.01); }
+    
+    body.chat-fullscreen .wrap > *:not(.chat-card):not(.sticky-preview):not(.compass-card) { 
+      display: none; 
+    }
+    
+    body.chat-fullscreen .wrap {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 0;
+      gap: 0;
+    }
+    
+    body.chat-fullscreen .sticky-preview {
+      position: relative;
+      top: 0;
+      border-radius: 0;
+      border: none;
+      border-bottom: 1px solid var(--line);
+      flex: 0 0 auto;
+      padding: 8px;
+    }
+    
+    body.chat-fullscreen .sticky-preview .stream-preview {
+      aspect-ratio: 16/5;
+      border-radius: 8px;
+    }
+    
+    body.chat-fullscreen .chat-card {
+      flex: 1 1 auto;
+      border-radius: 0;
+      border: none;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      cursor: default;
+    }
+    
+    body.chat-fullscreen #chat {
+      max-height: none;
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+    
+    body.chat-fullscreen .message {
+      font-size: 18px;
+      padding: 8px 10px;
+    }
+    
+    body.chat-fullscreen .compass-card {
+      flex: 0 0 auto;
+      border-radius: 0;
+      border: none;
+      padding: 8px;
+    }
+    
+    body.chat-fullscreen .compass {
+      gap: 8px;
+    }
+    
+    body.chat-fullscreen .rose {
+      width: 60px;
+      height: 60px;
+    }
+    
+    body.chat-fullscreen .needle {
+      height: 24px;
+      transform-origin: center 18px;
+    }
+    
+    body.chat-fullscreen .mapWrap {
+      height: 120px;
+      min-width: 200px;
+    }
+    
+    body.chat-fullscreen .compass-card .title {
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+    
+    body.chat-fullscreen .mapInfo {
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    .exit-fullscreen-btn {
+      display: none;
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 1000;
+      background: rgba(217, 58, 73, 0.9);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      font-size: 24px;
+      line-height: 1;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    body.chat-fullscreen .exit-fullscreen-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
   </style>
 </head>
 <body>
+  <button class="exit-fullscreen-btn" id="exitFullscreenBtn" title="Выйти из полноэкранного режима">✕</button>
+
   <div class="wrap">
     <!-- PREVIEW -->
     <div class="card sticky-preview">
@@ -142,7 +258,7 @@
     </div>
 
     <!-- COMPASS + MAP -->
-    <div class="card">
+    <div class="card compass-card">
       <div class="title">Compass + Google Maps (Satellite)</div>
       <div class="compass">
         <div class="rose">
@@ -153,12 +269,12 @@
           <iframe class="mapFrame" id="mapFrame" src="about:blank" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
       </div>
-      <div class="muted" style="margin-top:8px" id="mapInfo">Map: idle</div>
+      <div class="muted mapInfo" style="margin-top:8px" id="mapInfo">Map: idle</div>
     </div>
 
     <!-- CHAT -->
-    <div class="card">
-      <div class="title">Twitch Chat — sergiei2</div>
+    <div class="card chat-card" id="chatCard">
+      <div class="title">Twitch Chat — sergiei2 <span style="opacity:0.6">(нажми для полноэкранного режима)</span></div>
       <div class="chat-status" id="chatStatus">starting...</div>
       <div id="chat"></div>
     </div>
@@ -210,6 +326,20 @@
     const mapFrame = document.getElementById("mapFrame");
     const mapInfo  = document.getElementById("mapInfo");
 
+    // ===== Chat Fullscreen Toggle =====
+    const chatCard = document.getElementById("chatCard");
+    const exitFullscreenBtn = document.getElementById("exitFullscreenBtn");
+
+    chatCard.addEventListener("click", (e) => {
+      if (!document.body.classList.contains("chat-fullscreen")) {
+        document.body.classList.add("chat-fullscreen");
+      }
+    });
+
+    exitFullscreenBtn.addEventListener("click", () => {
+      document.body.classList.remove("chat-fullscreen");
+    });
+
     // ===== Chat =====
     const chatEl = document.getElementById("chat");
     const chatStatusEl = document.getElementById("chatStatus");
@@ -232,7 +362,10 @@
 
       chatEl.prepend(msg);
 
-      while (chatEl.children.length > MAX_MESSAGES) {
+      const isFullscreen = document.body.classList.contains("chat-fullscreen");
+      const maxMessages = isFullscreen ? 50 : MAX_MESSAGES;
+
+      while (chatEl.children.length > maxMessages) {
         chatEl.lastChild.remove();
       }
 
