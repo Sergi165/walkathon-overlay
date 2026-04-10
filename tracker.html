@@ -124,9 +124,11 @@
       gap: 0;
     }
     
+    /* Preview вверху */
     body.chat-fullscreen .sticky-preview {
       position: relative;
       top: 0;
+      order: 1;
       border-radius: 0;
       border: none;
       border-bottom: 1px solid var(--line);
@@ -139,7 +141,9 @@
       border-radius: 8px;
     }
     
+    /* Чат в середине */
     body.chat-fullscreen .chat-card {
+      order: 2;
       flex: 1 1 auto;
       border-radius: 0;
       border: none;
@@ -148,6 +152,7 @@
       flex-direction: column;
       overflow: hidden;
       cursor: default;
+      min-height: 0;
     }
     
     body.chat-fullscreen #chat {
@@ -162,7 +167,9 @@
       padding: 8px 10px;
     }
     
+    /* Компас + карта внизу */
     body.chat-fullscreen .compass-card {
+      order: 3;
       flex: 0 0 auto;
       border-radius: 0;
       border: none;
@@ -184,7 +191,7 @@
     }
     
     body.chat-fullscreen .mapWrap {
-      height: 120px;
+      height: 100px;
       min-width: 200px;
     }
     
