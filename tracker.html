@@ -8,7 +8,7 @@
   <script>
     const CHANNEL_NAME = "sergiei2";
     const MESSAGE_LIFETIME = 60;
-    const MAX_MESSAGES = 5;
+    const MAX_MESSAGES = 3;
   </script>
 
   <style>
@@ -86,7 +86,14 @@
     .mapFrame{ width:100%; height:100%; border:0; }
 
     .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-    #chat { display:flex; flex-direction: column-reverse; gap:6px; max-height: 420px; overflow:hidden; }
+    
+    #chat { 
+      display:flex; 
+      flex-direction: column-reverse; 
+      gap:6px; 
+      max-height: none; 
+      overflow: hidden;
+    }
 
     .message {
       padding: 6px 8px;
@@ -121,6 +128,7 @@
       gap: 0;
     }
     
+    /* Preview в fullscreen - уменьшен */
     body.chat-fullscreen .sticky-preview {
       position: relative;
       top: 0;
@@ -129,12 +137,12 @@
       border: none;
       border-bottom: 1px solid var(--line);
       flex: 0 0 auto;
-      padding: 8px;
+      padding: 6px; /* Уменьшил с 8px */
     }
     
     body.chat-fullscreen .sticky-preview .stream-preview {
-      aspect-ratio: 16/5;
-      border-radius: 8px;
+      aspect-ratio: 16/4; /* Изменил с 16/5 на 16/4 - более узкий */
+      border-radius: 6px;
     }
     
     body.chat-fullscreen .chat-card {
@@ -162,12 +170,50 @@
       padding: 8px 10px;
     }
     
+    /* Компас + карта в fullscreen - СИЛЬНО уменьшены */
     body.chat-fullscreen .compass-card {
       order: 3;
       flex: 0 0 auto;
       border-radius: 0;
       border: none;
-      padding: 8px;
+      padding: 6px; /* Уменьшил с 8px */
+    }
+
+    body.chat-fullscreen .compass {
+      gap: 6px; /* Уменьшил с 8px */
+    }
+
+    body.chat-fullscreen .rose {
+      width: 50px; /* Уменьшил с 60px */
+      height: 50px;
+    }
+
+    body.chat-fullscreen .needle {
+      height: 20px; /* Уменьшил с 24px */
+      width: 3px;
+      transform-origin: center 15px;
+    }
+
+    body.chat-fullscreen .mapWrap {
+      height: 80px; /* Уменьшил с 100px */
+      min-width: 150px;
+    }
+
+    body.chat-fullscreen .compass-card .title {
+      font-size: 10px; /* Уменьшил с 11px */
+      margin-bottom: 4px;
+    }
+
+    body.chat-fullscreen .mapInfo {
+      font-size: 9px; /* Уменьшил с 11px */
+      margin-top: 3px;
+    }
+
+    body.chat-fullscreen .rose .n,
+    body.chat-fullscreen .rose .e,
+    body.chat-fullscreen .rose .s,
+    body.chat-fullscreen .rose .w {
+      font-size: 9px; /* Уменьшил размер букв компаса */
     }
 
     .exit-fullscreen-btn {
@@ -274,12 +320,6 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
-    // Координаты Мурино (Бугры) для центра карты
-    const DEFAULT_LOCATION = {
-      lat: 60.0547,
-      lon: 30.4460
-    };
-
     const parent = location.hostname;
     document.getElementById("twitchPreview").src =
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
@@ -342,16 +382,20 @@
       chatEl.prepend(msg);
 
       const isFullscreen = document.body.classList.contains("chat-fullscreen");
-      const maxMessages = isFullscreen ? 50 : MAX_MESSAGES;
+      const maxMessages = isFullscreen ? 100 : MAX_MESSAGES;
 
       while (chatEl.children.length > maxMessages) {
         chatEl.lastChild.remove();
       }
 
-      setTimeout(() => {
-        msg.classList.add("fade-out");
-        setTimeout(() => msg.remove(), 400);
-      }, MESSAGE_LIFETIME * 1000);
+      if (!isFullscreen) {
+        setTimeout(() => {
+          msg.classList.add("fade-out");
+          setTimeout(() => {
+            if (msg.parentNode) msg.remove();
+          }, 400);
+        }, MESSAGE_LIFETIME * 1000);
+      }
     }
 
     let ws;
@@ -454,7 +498,6 @@
       statusEl.textContent = "auth error";
     });
 
-    // ===== VINCENTY INVERSE FORMULA =====
     function vincentyDistance(lat1, lon1, lat2, lon2) {
       const a = 6378137.0;
       const b = 6356752.314245;
@@ -585,14 +628,12 @@
       lastMapKey = "";
     }
 
-    // Используем Yandex Maps для России
     function setMap(lat, lon){
       const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
       if (key === lastMapKey) return;
       lastMapKey = key;
 
       const zoom = 17;
-      // Yandex Maps iframe API
       const src = `https://yandex.ru/map-widget/v1/?ll=${lon}%2C${lat}&z=${zoom}&l=map&pt=${lon},${lat},pm2rdm`;
 
       mapFrame.src = src;
