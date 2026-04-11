@@ -529,22 +529,41 @@
 
         setMap(latitude, longitude);
 
-        const point = { lat: latitude, lon: longitude, time: now };
+        // Требуем хорошую точность
+        if (!accuracy || accuracy > 15) {
+          debugEl.textContent = `❌ Плохая точность: ${accuracy?.toFixed(1)}m (нужно ≤15m)`;
+          updateUI({ status: "bad signal", acc: accuracy, speed });
+          
+          if (now - lastUpdateTime > 2000) {
+            await pushState("bad signal", { accuracy, latitude, longitude, speed: speed ?? 0 });
+            lastUpdateTime = now;
+          }
+          return;
+        }
+
+        const point = { lat: latitude, lon: longitude, time: now, acc: accuracy };
 
         if (lastPoint) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
+          const timeDiff = (now - lastPoint.time) / 1000;
           
-          // ДОБАВЛЯЕМ ВСЁ БЕЗ ФИЛЬТРОВ
-          if (step > 0) {
+          // Минимальный шаг = сумма погрешностей двух точек
+          const minStep = (lastPoint.acc + point.acc);
+          
+          if (step > minStep && step < 200) {
             distanceMeters += step;
-            debugEl.textContent = `Последний шаг: ${step.toFixed(2)}m | Всего: ${distanceMeters.toFixed(1)}m | Точность: ${accuracy?.toFixed(1)}m`;
-            console.log(`+${step.toFixed(2)}m`);
+            debugEl.textContent = `✅ +${step.toFixed(1)}m | Всего: ${distanceMeters.toFixed(0)}m | Точность: ${accuracy.toFixed(1)}m`;
+            console.log(`+${step.toFixed(1)}m`);
+            lastPoint = point; // Обновляем точку только при засчитывании
+          } else if (step <= minStep) {
+            debugEl.textContent = `⏸️ Шаг ${step.toFixed(1)}m ≤ погрешность ${minStep.toFixed(1)}m | Всего: ${distanceMeters.toFixed(0)}m`;
+          } else {
+            debugEl.textContent = `❌ Слишком большой скачок: ${step.toFixed(1)}m | Всего: ${distanceMeters.toFixed(0)}m`;
           }
         } else {
-          debugEl.textContent = `Первая точка установлена | Точность: ${accuracy?.toFixed(1)}m`;
+          lastPoint = point;
+          debugEl.textContent = `🎯 Стартовая точка | Точность: ${accuracy.toFixed(1)}m`;
         }
-
-        lastPoint = point;
 
         updateUI({ status: "tracking", acc: accuracy, speed });
         
