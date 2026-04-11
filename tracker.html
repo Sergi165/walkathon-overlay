@@ -252,18 +252,13 @@
       color: #ffa94d;
     }
 
-    .checkpoint-info {
+    .info-box {
       margin-top: 8px;
       padding: 8px;
       background: rgba(57, 255, 20, 0.1);
       border: 1px solid rgba(57, 255, 20, 0.3);
       border-radius: 8px;
       font-size: 12px;
-    }
-
-    .checkpoint-info .next {
-      color: var(--green);
-      font-weight: 700;
     }
   </style>
 </head>
@@ -288,20 +283,19 @@
       <div class="meta" style="margin-top:10px">
         <div class="stat"><div class="k">Status</div><div class="v" id="status">auth...</div></div>
         <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">-</div></div>
-        <div class="stat"><div class="k">Checkpoints</div><div class="v" id="checkpointCount">0/0</div></div>
-        <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
+        <div class="stat"><div class="k">Speed</div><div class="v" id="speed">-</div></div>
+        <div class="stat"><div class="k">Points</div><div class="v" id="pointsCount">0</div></div>
       </div>
 
-      <div class="checkpoint-info" id="checkpointInfo">
-        <div>📍 Следующий чекпоинт: <span class="next" id="nextCheckpoint">-</span></div>
-        <div>📏 Расстояние: <span id="distanceToNext">-</span></div>
+      <div class="info-box">
+        <div>📊 Последний шаг: <span id="lastStep">-</span></div>
+        <div>⏱️ Интервал: <span id="interval">-</span></div>
       </div>
 
       <div class="row" style="margin-top:12px">
         <button class="primary" id="startBtn" disabled>Start GPS</button>
         <button class="ok" id="stopBtn" disabled>Stop</button>
         <button class="danger" id="resetBtn" disabled>Reset</button>
-        <button class="ok" id="setStartBtn" disabled>Set Start Point</button>
       </div>
 
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
@@ -311,7 +305,7 @@
 
     <!-- COMPASS + MAP -->
     <div class="card compass-card">
-      <div class="title">Live Map with Checkpoints</div>
+      <div class="title">Live Map with Path</div>
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
@@ -352,9 +346,10 @@
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
-    const MIN_ACCURACY = 30;
-    const CHECKPOINT_DISTANCE = 10; // Чекпоинт каждые 10 метров
-    const CHECKPOINT_RADIUS = 15; // Радиус достижения чекпоинта
+    const MIN_ACCURACY = 20; // Строгая точность
+    const MIN_TIME_BETWEEN_POINTS = 3000; // 3 секунды между точками
+    const MIN_DISTANCE_FOR_COUNT = 3; // Минимум 3 метра для учёта
+    const MAX_REASONABLE_SPEED = 3; // м/с (10.8 км/ч - быстрая ходьба)
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -366,17 +361,16 @@
     const fillEl = document.getElementById("fill");
     const statusEl = document.getElementById("status");
     const accEl = document.getElementById("acc");
-    const headingTextEl = document.getElementById("headingText");
+    const speedEl = document.getElementById("speed");
     const authInfoEl = document.getElementById("authInfo");
     const debugLogEl = document.getElementById("debugLog");
-    const checkpointCountEl = document.getElementById("checkpointCount");
-    const nextCheckpointEl = document.getElementById("nextCheckpoint");
-    const distanceToNextEl = document.getElementById("distanceToNext");
+    const pointsCountEl = document.getElementById("pointsCount");
+    const lastStepEl = document.getElementById("lastStep");
+    const intervalEl = document.getElementById("interval");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
     const resetBtn = document.getElementById("resetBtn");
-    const setStartBtn = document.getElementById("setStartBtn");
 
     const mapCanvas = document.getElementById("mapCanvas");
     const mapCtx = mapCanvas.getContext("2d");
@@ -391,7 +385,7 @@
       if (type === 'warn') div.className = 'warn';
       debugLogEl.insertBefore(div, debugLogEl.firstChild);
       
-      while (debugLogEl.children.length > 20) {
+      while (debugLogEl.children.length > 15) {
         debugLogEl.removeChild(debugLogEl.lastChild);
       }
       
@@ -525,7 +519,6 @@
       startBtn.disabled = !v;
       stopBtn.disabled  = !v;
       resetBtn.disabled = !v;
-      setStartBtn.disabled = !v;
     }
     setBtnsEnabled(false);
 
@@ -559,7 +552,7 @@
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    function drawMap(currentPos, checkpoints, visitedCount) {
+    function drawMap(path, currentPos) {
       const w = mapCanvas.width / window.devicePixelRatio;
       const h = mapCanvas.height / window.devicePixelRatio;
       
@@ -569,22 +562,22 @@
       mapCtx.fillStyle = '#0a0e14';
       mapCtx.fillRect(0, 0, w, h);
 
-      if (!currentPos || checkpoints.length === 0) return;
+      if (path.length === 0) return;
 
       // Calculate bounds
-      let minLat = currentPos.lat, maxLat = currentPos.lat;
-      let minLon = currentPos.lon, maxLon = currentPos.lon;
+      let minLat = path[0].lat, maxLat = path[0].lat;
+      let minLon = path[0].lon, maxLon = path[0].lon;
       
-      checkpoints.forEach(cp => {
-        minLat = Math.min(minLat, cp.lat);
-        maxLat = Math.max(maxLat, cp.lat);
-        minLon = Math.min(minLon, cp.lon);
-        maxLon = Math.max(maxLon, cp.lon);
+      path.forEach(p => {
+        minLat = Math.min(minLat, p.lat);
+        maxLat = Math.max(maxLat, p.lat);
+        minLon = Math.min(minLon, p.lon);
+        maxLon = Math.max(maxLon, p.lon);
       });
 
       const padding = 30;
-      const latRange = maxLat - minLat || 0.0001;
-      const lonRange = maxLon - minLon || 0.0001;
+      const latRange = (maxLat - minLat) || 0.0001;
+      const lonRange = (maxLon - minLon) || 0.0001;
 
       function toScreen(lat, lon) {
         const x = padding + ((lon - minLon) / lonRange) * (w - padding * 2);
@@ -592,66 +585,49 @@
         return { x, y };
       }
 
-      // Draw path between checkpoints
-      if (checkpoints.length > 1) {
-        mapCtx.strokeStyle = '#2a2f3a';
-        mapCtx.lineWidth = 2;
-        mapCtx.setLineDash([5, 5]);
+      // Draw path
+      if (path.length > 1) {
+        mapCtx.strokeStyle = '#39ff14';
+        mapCtx.lineWidth = 3;
+        mapCtx.lineJoin = 'round';
+        mapCtx.lineCap = 'round';
         mapCtx.beginPath();
-        const start = toScreen(checkpoints[0].lat, checkpoints[0].lon);
+        const start = toScreen(path[0].lat, path[0].lon);
         mapCtx.moveTo(start.x, start.y);
-        for (let i = 1; i < checkpoints.length; i++) {
-          const p = toScreen(checkpoints[i].lat, checkpoints[i].lon);
+        for (let i = 1; i < path.length; i++) {
+          const p = toScreen(path[i].lat, path[i].lon);
           mapCtx.lineTo(p.x, p.y);
         }
         mapCtx.stroke();
-        mapCtx.setLineDash([]);
       }
 
-      // Draw checkpoints
-      checkpoints.forEach((cp, i) => {
-        const p = toScreen(cp.lat, cp.lon);
-        const visited = i < visitedCount;
-        
+      // Draw points
+      path.forEach((p, i) => {
+        const pos = toScreen(p.lat, p.lon);
         mapCtx.beginPath();
-        mapCtx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-        mapCtx.fillStyle = visited ? '#39ff14' : '#2a2f3a';
+        mapCtx.arc(pos.x, pos.y, i === 0 ? 6 : 4, 0, Math.PI * 2);
+        mapCtx.fillStyle = i === 0 ? '#00d26a' : '#39ff14';
         mapCtx.fill();
-        mapCtx.strokeStyle = visited ? '#00d26a' : '#1a1f2a';
-        mapCtx.lineWidth = 2;
-        mapCtx.stroke();
-        
-        // Number
-        mapCtx.fillStyle = visited ? '#000' : '#666';
-        mapCtx.font = 'bold 10px Arial';
-        mapCtx.textAlign = 'center';
-        mapCtx.textBaseline = 'middle';
-        mapCtx.fillText(i + 1, p.x, p.y);
       });
 
-      // Draw current position
-      const pos = toScreen(currentPos.lat, currentPos.lon);
-      mapCtx.beginPath();
-      mapCtx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
-      mapCtx.fillStyle = '#ff4d4d';
-      mapCtx.fill();
-      mapCtx.strokeStyle = '#fff';
-      mapCtx.lineWidth = 2;
-      mapCtx.stroke();
-
-      // Draw accuracy circle
-      if (currentPos.accuracy) {
-        const metersPerDegLat = 111320;
-        const accRadius = (currentPos.accuracy / metersPerDegLat / latRange) * (h - padding * 2);
-        mapCtx.beginPath();
-        mapCtx.arc(pos.x, pos.y, Math.min(accRadius, 50), 0, Math.PI * 2);
-        mapCtx.strokeStyle = 'rgba(255, 77, 77, 0.3)';
-        mapCtx.lineWidth = 1;
-        mapCtx.stroke();
+      // Draw current position (if different from last path point)
+      if (currentPos && path.length > 0) {
+        const lastPath = path[path.length - 1];
+        const dist = haversine(currentPos.lat, currentPos.lon, lastPath.lat, lastPath.lon);
+        if (dist > 1) { // Show only if moved more than 1m from last saved point
+          const pos = toScreen(currentPos.lat, currentPos.lon);
+          mapCtx.beginPath();
+          mapCtx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
+          mapCtx.fillStyle = '#ff4d4d';
+          mapCtx.fill();
+          mapCtx.strokeStyle = '#fff';
+          mapCtx.lineWidth = 2;
+          mapCtx.stroke();
+        }
       }
     }
 
-    // ===== Tracker with Checkpoints =====
+    // ===== Tracker =====
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
     let watchId = null;
@@ -659,9 +635,9 @@
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
-    let checkpoints = [];
-    let visitedCheckpoints = 0;
-    let startPoint = null;
+    let pathPoints = []; // Сохранённые точки пути
+    let lastSavedPoint = null;
+    let gpsStartTime = 0;
 
     function haversine(lat1, lon1, lat2, lon2) {
       const R = 6371000;
@@ -675,21 +651,6 @@
       return 2 * R * Math.asin(Math.sqrt(a));
     }
 
-    function generateCheckpoints(start, count) {
-      const cps = [start];
-      // Generate checkpoints in a straight line for testing
-      // In real scenario, you can place them manually
-      for (let i = 1; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const distance = CHECKPOINT_DISTANCE / 111320; // degrees
-        cps.push({
-          lat: cps[i-1].lat + Math.cos(angle) * distance,
-          lon: cps[i-1].lon + Math.sin(angle) * distance
-        });
-      }
-      return cps;
-    }
-
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
       const percent = goalMeters > 0 ? Math.min((distanceMeters / goalMeters) * 100, 100) : 0;
@@ -697,35 +658,11 @@
       doneEl.textContent = fmtMeters(distanceMeters);
       leftEl.textContent = "LEFT: " + fmtMeters(left);
       fillEl.style.width = percent + "%";
-      checkpointCountEl.textContent = `${visitedCheckpoints}/${checkpoints.length}`;
+      pointsCountEl.textContent = pathPoints.length;
 
       if (extra.status) statusEl.textContent = extra.status;
       if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + "m";
-    }
-
-    function checkCheckpoints() {
-      if (!currentPosition || visitedCheckpoints >= checkpoints.length) return;
-
-      const nextCP = checkpoints[visitedCheckpoints];
-      const dist = haversine(currentPosition.lat, currentPosition.lon, nextCP.lat, nextCP.lon);
-      
-      distanceToNextEl.textContent = dist.toFixed(1) + "m";
-      nextCheckpointEl.textContent = `#${visitedCheckpoints + 1}`;
-
-      if (dist <= CHECKPOINT_RADIUS) {
-        visitedCheckpoints++;
-        distanceMeters += CHECKPOINT_DISTANCE;
-        
-        log(`🎯 Чекпоинт #${visitedCheckpoints} достигнут! +${CHECKPOINT_DISTANCE}m`);
-        
-        if (visitedCheckpoints < checkpoints.length) {
-          log(`📍 Следующий чекпоинт: #${visitedCheckpoints + 1}`);
-        } else {
-          log(`🏁 Все чекпоинты пройдены!`);
-        }
-        
-        updateUI();
-      }
+      if (extra.speed != null) speedEl.textContent = extra.speed.toFixed(1) + " km/h";
     }
 
     async function pushState(status, extra = {}) {
@@ -734,25 +671,8 @@
         distanceMeters: Math.round(distanceMeters),
         status,
         updatedAt: Date.now(),
-        visitedCheckpoints,
         ...extra
       });
-    }
-
-    async function setStartPoint() {
-      if (!currentPosition) {
-        alert("Сначала запустите GPS!");
-        return;
-      }
-      
-      startPoint = { lat: currentPosition.lat, lon: currentPosition.lon };
-      checkpoints = generateCheckpoints(startPoint, 50); // 50 чекпоинтов = 500м
-      visitedCheckpoints = 0;
-      distanceMeters = 0;
-      
-      log(`🚩 Стартовая точка установлена, создано ${checkpoints.length} чекпоинтов`);
-      updateUI();
-      drawMap(currentPosition, checkpoints, visitedCheckpoints);
     }
 
     async function startGPS() {
@@ -763,38 +683,87 @@
       log("🟢 GPS запущен");
       statusEl.textContent = "starting";
       lastUpdateTime = 0;
+      gpsStartTime = Date.now();
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
+        const { latitude, longitude, accuracy, speed } = pos.coords;
         const now = Date.now();
+        const timeSinceStart = (now - gpsStartTime) / 1000;
 
         currentPosition = { lat: latitude, lon: longitude, accuracy, time: now };
 
+        // Прогрев 5 секунд
+        if (timeSinceStart < 5) {
+          log(`⏳ Прогрев GPS... ${(5 - timeSinceStart).toFixed(0)}с`);
+          updateUI({ status: "warming up", acc: accuracy });
+          drawMap(pathPoints, currentPosition);
+          return;
+        }
+
         // Проверка точности
         if (!accuracy || accuracy > MIN_ACCURACY) {
-          log(`⚠️ Слабый сигнал: ${accuracy?.toFixed(1)}m`, 'warn');
+          log(`❌ Плохой сигнал: ${accuracy?.toFixed(1)}m`, 'warn');
           updateUI({ status: "weak gps", acc: accuracy });
+          drawMap(pathPoints, currentPosition);
           
           if (now - lastUpdateTime > 2000) {
             await pushState("weak gps", { accuracy, latitude, longitude });
             lastUpdateTime = now;
           }
-          
-          drawMap(currentPosition, checkpoints, visitedCheckpoints);
           return;
         }
 
-        log(`📍 Позиция: точность ${accuracy.toFixed(1)}m`);
-
-        if (checkpoints.length > 0) {
-          checkCheckpoints();
+        // Первая точка
+        if (!lastSavedPoint) {
+          lastSavedPoint = { lat: latitude, lon: longitude, time: now };
+          pathPoints.push(lastSavedPoint);
+          log(`🎯 Первая точка установлена`);
+          updateUI({ status: "tracking", acc: accuracy, speed: 0 });
+          drawMap(pathPoints, currentPosition);
+          return;
         }
 
-        updateUI({ status: "tracking", acc: accuracy });
-        drawMap(currentPosition, checkpoints, visitedCheckpoints);
+        // Проверяем время с последней сохранённой точки
+        const timeDiff = (now - lastSavedPoint.time) / 1000;
+        
+        if (timeDiff < MIN_TIME_BETWEEN_POINTS / 1000) {
+          // Слишком рано, просто обновляем UI
+          updateUI({ status: "tracking", acc: accuracy, speed: speed ? speed * 3.6 : 0 });
+          drawMap(pathPoints, currentPosition);
+          intervalEl.textContent = `${timeDiff.toFixed(1)}с (ждём ${(MIN_TIME_BETWEEN_POINTS / 1000).toFixed(0)}с)`;
+          return;
+        }
+
+        // Считаем расстояние
+        const distance = haversine(lastSavedPoint.lat, lastSavedPoint.lon, latitude, longitude);
+        const calculatedSpeed = distance / timeDiff;
+        const speedKmh = calculatedSpeed * 3.6;
+
+        log(`📏 Дистанция: ${distance.toFixed(2)}m за ${timeDiff.toFixed(1)}с, скорость: ${speedKmh.toFixed(1)}км/ч`);
+
+        // Проверки
+        if (distance < MIN_DISTANCE_FOR_COUNT) {
+          log(`⚠️ Слишком мало: ${distance.toFixed(2)}m < ${MIN_DISTANCE_FOR_COUNT}m`, 'warn');
+          lastStepEl.textContent = `${distance.toFixed(2)}m (мало)`;
+        } else if (calculatedSpeed > MAX_REASONABLE_SPEED) {
+          log(`⚠️ Слишком быстро: ${speedKmh.toFixed(1)}км/ч`, 'warn');
+          lastStepEl.textContent = `${distance.toFixed(2)}m (быстро)`;
+        } else {
+          // ВСЁ ОК - ДОБАВЛЯЕМ!
+          distanceMeters += distance;
+          lastSavedPoint = { lat: latitude, lon: longitude, time: now };
+          pathPoints.push(lastSavedPoint);
+          
+          log(`✅ +${distance.toFixed(2)}m! Всего: ${distanceMeters.toFixed(1)}m`);
+          lastStepEl.textContent = `${distance.toFixed(2)}m ✓`;
+        }
+
+        intervalEl.textContent = `${timeDiff.toFixed(1)}с`;
+        updateUI({ status: "tracking", acc: accuracy, speed: speedKmh });
+        drawMap(pathPoints, currentPosition);
         
         if (now - lastUpdateTime > 1000) {
-          await pushState("tracking", { accuracy, latitude, longitude });
+          await pushState("tracking", { accuracy, latitude, longitude, speed: speedKmh });
           lastUpdateTime = now;
         }
 
@@ -821,18 +790,19 @@
     }
 
     async function resetGPS() {
-      if (!confirm("Сбросить дистанцию и чекпоинты?")) return;
+      if (!confirm("Сбросить дистанцию и путь?")) return;
       distanceMeters = 0;
-      visitedCheckpoints = 0;
-      checkpoints = [];
-      startPoint = null;
+      pathPoints = [];
+      lastSavedPoint = null;
+      currentPosition = null;
       debugLogEl.innerHTML = '';
       log("🔄 Сброс выполнен");
-      updateUI({ status: "reset", acc: null });
-      drawMap(currentPosition, checkpoints, visitedCheckpoints);
+      lastStepEl.textContent = '-';
+      intervalEl.textContent = '-';
+      updateUI({ status: "reset", acc: null, speed: null });
+      drawMap(pathPoints, currentPosition);
       await update(stateRef, {
         distanceMeters: 0, status: "reset", updatedAt: Date.now(),
-        visitedCheckpoints: 0,
         latitude: null, longitude: null, accuracy: null
       });
     }
@@ -840,7 +810,6 @@
     startBtn.onclick = startGPS;
     stopBtn.onclick = stopGPS;
     resetBtn.onclick = resetGPS;
-    setStartBtn.onclick = setStartPoint;
 
     // ===== Compass =====
     const needleEl = document.getElementById("needle");
@@ -876,7 +845,6 @@
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
       if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
-      if (typeof s.visitedCheckpoints === "number") visitedCheckpoints = s.visitedCheckpoints;
 
       updateUI({ status: s.status || "idle", acc: s.accuracy ?? null });
     });
@@ -885,7 +853,7 @@
     updateUI({ status: "idle" });
     connectTwitch();
     log("✅ Приложение запущено");
-    log("ℹ️ Нажми 'Set Start Point' после включения GPS");
+    log("ℹ️ Точки сохраняются каждые 3 секунды при движении ≥3м");
   </script>
 </body>
 </html>
