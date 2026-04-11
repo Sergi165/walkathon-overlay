@@ -49,7 +49,6 @@
 
     .stream-preview { width:100%; aspect-ratio:16/9; border:0; border-radius:12px; background:#000; }
 
-    /* compass + map */
     .compass { display:flex; align-items:stretch; gap:12px; }
     .rose {
       width: 86px; height: 86px; border-radius: 50%;
@@ -78,16 +77,14 @@
     .mapWrap{
       flex: 1 1 auto;
       min-width: 240px;
-      height: 240px;
+      height: 170px;
       border-radius: 12px;
       overflow: hidden;
       border: 1px solid var(--line);
       background:#000;
-      position: relative;
     }
-    #mapCanvas { width: 100%; height: 100%; }
+    .mapFrame{ width:100%; height:100%; border:0; }
 
-    /* chat */
     .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
     #chat { display:flex; flex-direction: column-reverse; gap:6px; max-height: 420px; overflow:hidden; }
 
@@ -109,7 +106,6 @@
     @keyframes fadeIn { from {opacity:0; transform:translateY(6px)} to {opacity:1; transform:translateY(0)} }
     @keyframes fadeOut { from {opacity:1; transform:translateY(0)} to {opacity:0; transform:translateY(-6px)} }
 
-    /* CHAT FULLSCREEN MODE */
     .chat-card { cursor: pointer; transition: all 0.3s ease; }
     .chat-card:hover { transform: scale(1.01); }
     
@@ -173,35 +169,6 @@
       border: none;
       padding: 8px;
     }
-    
-    body.chat-fullscreen .compass {
-      gap: 8px;
-    }
-    
-    body.chat-fullscreen .rose {
-      width: 60px;
-      height: 60px;
-    }
-    
-    body.chat-fullscreen .needle {
-      height: 24px;
-      transform-origin: center 18px;
-    }
-    
-    body.chat-fullscreen .mapWrap {
-      height: 140px;
-      min-width: 200px;
-    }
-    
-    body.chat-fullscreen .compass-card .title {
-      font-size: 11px;
-      margin-bottom: 6px;
-    }
-    
-    body.chat-fullscreen .mapInfo {
-      font-size: 11px;
-      margin-top: 4px;
-    }
 
     .exit-fullscreen-btn {
       display: none;
@@ -226,53 +193,17 @@
       align-items: center;
       justify-content: center;
     }
-
-    .debug-log {
-      background: rgba(0,0,0,0.3);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px;
-      margin-top: 8px;
-      font-size: 11px;
-      font-family: monospace;
-      max-height: 150px;
-      overflow-y: auto;
-      color: #8ae68a;
-    }
-    
-    .debug-log div {
-      margin: 2px 0;
-    }
-    
-    .debug-log .error {
-      color: #ff6b6b;
-    }
-    
-    .debug-log .warn {
-      color: #ffa94d;
-    }
-
-    .info-box {
-      margin-top: 8px;
-      padding: 8px;
-      background: rgba(57, 255, 20, 0.1);
-      border: 1px solid rgba(57, 255, 20, 0.3);
-      border-radius: 8px;
-      font-size: 12px;
-    }
   </style>
 </head>
 <body>
   <button class="exit-fullscreen-btn" id="exitFullscreenBtn" title="Выйти из полноэкранного режима">✕</button>
 
   <div class="wrap">
-    <!-- PREVIEW -->
     <div class="card sticky-preview">
       <div class="title">Stream Preview</div>
       <iframe class="stream-preview" id="twitchPreview" allowfullscreen></iframe>
     </div>
 
-    <!-- TRACKER -->
     <div class="card">
       <div class="title">Walkathon Tracker</div>
       <div class="big" id="done">0m</div>
@@ -284,12 +215,7 @@
         <div class="stat"><div class="k">Status</div><div class="v" id="status">auth...</div></div>
         <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">-</div></div>
         <div class="stat"><div class="k">Speed</div><div class="v" id="speed">-</div></div>
-        <div class="stat"><div class="k">Points</div><div class="v" id="pointsCount">0</div></div>
-      </div>
-
-      <div class="info-box">
-        <div>📊 Последний шаг: <span id="lastStep">-</span></div>
-        <div>⏱️ Интервал: <span id="interval">-</span></div>
+        <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
       </div>
 
       <div class="row" style="margin-top:12px">
@@ -299,26 +225,22 @@
       </div>
 
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
-      
-      <div class="debug-log" id="debugLog"></div>
     </div>
 
-    <!-- COMPASS + MAP -->
     <div class="card compass-card">
-      <div class="title">Live Map with Path</div>
+      <div class="title">Compass + Google Maps</div>
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
           <div class="n">N</div><div class="e">E</div><div class="s">S</div><div class="w">W</div>
         </div>
         <div class="mapWrap">
-          <canvas id="mapCanvas"></canvas>
+          <iframe class="mapFrame" id="mapFrame" src="about:blank" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
       </div>
       <div class="muted mapInfo" style="margin-top:8px" id="mapInfo">Map: idle</div>
     </div>
 
-    <!-- CHAT -->
     <div class="card chat-card" id="chatCard">
       <div class="title">Twitch Chat — sergiei2 <span style="opacity:0.6">(нажми для полноэкранного режима)</span></div>
       <div class="chat-status" id="chatStatus">starting...</div>
@@ -346,10 +268,8 @@
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
-    const MIN_ACCURACY = 20; // Строгая точность
-    const MIN_TIME_BETWEEN_POINTS = 3000; // 3 секунды между точками
-    const MIN_DISTANCE_FOR_COUNT = 3; // Минимум 3 метра для учёта
-    const MAX_REASONABLE_SPEED = 3; // м/с (10.8 км/ч - быстрая ходьба)
+    const MIN_ACCURACY = 25;
+    const UPDATE_INTERVAL = 2000; // Обновление каждые 2 секунды
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -362,41 +282,20 @@
     const statusEl = document.getElementById("status");
     const accEl = document.getElementById("acc");
     const speedEl = document.getElementById("speed");
+    const headingTextEl = document.getElementById("headingText");
     const authInfoEl = document.getElementById("authInfo");
-    const debugLogEl = document.getElementById("debugLog");
-    const pointsCountEl = document.getElementById("pointsCount");
-    const lastStepEl = document.getElementById("lastStep");
-    const intervalEl = document.getElementById("interval");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
     const resetBtn = document.getElementById("resetBtn");
 
-    const mapCanvas = document.getElementById("mapCanvas");
-    const mapCtx = mapCanvas.getContext("2d");
+    const mapFrame = document.getElementById("mapFrame");
     const mapInfo  = document.getElementById("mapInfo");
 
-    // Debug logger
-    function log(msg, type = 'info') {
-      const div = document.createElement('div');
-      const time = new Date().toLocaleTimeString();
-      div.textContent = `[${time}] ${msg}`;
-      if (type === 'error') div.className = 'error';
-      if (type === 'warn') div.className = 'warn';
-      debugLogEl.insertBefore(div, debugLogEl.firstChild);
-      
-      while (debugLogEl.children.length > 15) {
-        debugLogEl.removeChild(debugLogEl.lastChild);
-      }
-      
-      console.log(msg);
-    }
-
-    // ===== Chat Fullscreen Toggle =====
     const chatCard = document.getElementById("chatCard");
     const exitFullscreenBtn = document.getElementById("exitFullscreenBtn");
 
-    chatCard.addEventListener("click", (e) => {
+    chatCard.addEventListener("click", () => {
       if (!document.body.classList.contains("chat-fullscreen")) {
         document.body.classList.add("chat-fullscreen");
       }
@@ -406,7 +305,6 @@
       document.body.classList.remove("chat-fullscreen");
     });
 
-    // ===== Chat =====
     const chatEl = document.getElementById("chat");
     const chatStatusEl = document.getElementById("chatStatus");
 
@@ -513,7 +411,6 @@
       }
     }
 
-    // ===== Auth =====
     let authed = false;
     function setBtnsEnabled(v){
       startBtn.disabled = !v;
@@ -538,106 +435,33 @@
     authInfoEl.textContent = "Auth: signing in...";
     ensureAuth().catch((e)=>{
       console.log("Auth error", e);
-      authInfoEl.textContent = "Auth: error (enable Anonymous in Firebase)";
+      authInfoEl.textContent = "Auth: error";
       statusEl.textContent = "auth error";
     });
 
-    // ===== Map Canvas =====
-    function resizeCanvas() {
-      const rect = mapCanvas.getBoundingClientRect();
-      mapCanvas.width = rect.width * window.devicePixelRatio;
-      mapCanvas.height = rect.height * window.devicePixelRatio;
-      mapCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    }
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    function drawMap(path, currentPos) {
-      const w = mapCanvas.width / window.devicePixelRatio;
-      const h = mapCanvas.height / window.devicePixelRatio;
-      
-      mapCtx.clearRect(0, 0, w, h);
-      
-      // Background
-      mapCtx.fillStyle = '#0a0e14';
-      mapCtx.fillRect(0, 0, w, h);
-
-      if (path.length === 0) return;
-
-      // Calculate bounds
-      let minLat = path[0].lat, maxLat = path[0].lat;
-      let minLon = path[0].lon, maxLon = path[0].lon;
-      
-      path.forEach(p => {
-        minLat = Math.min(minLat, p.lat);
-        maxLat = Math.max(maxLat, p.lat);
-        minLon = Math.min(minLon, p.lon);
-        maxLon = Math.max(maxLon, p.lon);
-      });
-
-      const padding = 30;
-      const latRange = (maxLat - minLat) || 0.0001;
-      const lonRange = (maxLon - minLon) || 0.0001;
-
-      function toScreen(lat, lon) {
-        const x = padding + ((lon - minLon) / lonRange) * (w - padding * 2);
-        const y = h - padding - ((lat - minLat) / latRange) * (h - padding * 2);
-        return { x, y };
-      }
-
-      // Draw path
-      if (path.length > 1) {
-        mapCtx.strokeStyle = '#39ff14';
-        mapCtx.lineWidth = 3;
-        mapCtx.lineJoin = 'round';
-        mapCtx.lineCap = 'round';
-        mapCtx.beginPath();
-        const start = toScreen(path[0].lat, path[0].lon);
-        mapCtx.moveTo(start.x, start.y);
-        for (let i = 1; i < path.length; i++) {
-          const p = toScreen(path[i].lat, path[i].lon);
-          mapCtx.lineTo(p.x, p.y);
-        }
-        mapCtx.stroke();
-      }
-
-      // Draw points
-      path.forEach((p, i) => {
-        const pos = toScreen(p.lat, p.lon);
-        mapCtx.beginPath();
-        mapCtx.arc(pos.x, pos.y, i === 0 ? 6 : 4, 0, Math.PI * 2);
-        mapCtx.fillStyle = i === 0 ? '#00d26a' : '#39ff14';
-        mapCtx.fill();
-      });
-
-      // Draw current position (if different from last path point)
-      if (currentPos && path.length > 0) {
-        const lastPath = path[path.length - 1];
-        const dist = haversine(currentPos.lat, currentPos.lon, lastPath.lat, lastPath.lon);
-        if (dist > 1) { // Show only if moved more than 1m from last saved point
-          const pos = toScreen(currentPos.lat, currentPos.lon);
-          mapCtx.beginPath();
-          mapCtx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
-          mapCtx.fillStyle = '#ff4d4d';
-          mapCtx.fill();
-          mapCtx.strokeStyle = '#fff';
-          mapCtx.lineWidth = 2;
-          mapCtx.stroke();
-        }
-      }
-    }
-
-    // ===== Tracker =====
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
     let watchId = null;
-    let currentPosition = null;
+    let anchorPoint = null; // Опорная точка для измерения
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
-    let pathPoints = []; // Сохранённые точки пути
-    let lastSavedPoint = null;
-    let gpsStartTime = 0;
+    let lastMapUpdate = 0;
+
+    function updateUI(extra = {}) {
+      const left = Math.max(goalMeters - distanceMeters, 0);
+      const percent = goalMeters > 0 ? Math.min((distanceMeters / goalMeters) * 100, 100) : 0;
+
+      doneEl.textContent = fmtMeters(distanceMeters);
+      leftEl.textContent = "LEFT: " + fmtMeters(left);
+      fillEl.style.width = percent + "%";
+
+      if (extra.status) statusEl.textContent = extra.status;
+      if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + "m";
+      if (extra.speed != null && !Number.isNaN(extra.speed)) {
+        speedEl.textContent = (extra.speed * 3.6).toFixed(1) + " km/h";
+      }
+    }
 
     function haversine(lat1, lon1, lat2, lon2) {
       const R = 6371000;
@@ -651,20 +475,6 @@
       return 2 * R * Math.asin(Math.sqrt(a));
     }
 
-    function updateUI(extra = {}) {
-      const left = Math.max(goalMeters - distanceMeters, 0);
-      const percent = goalMeters > 0 ? Math.min((distanceMeters / goalMeters) * 100, 100) : 0;
-
-      doneEl.textContent = fmtMeters(distanceMeters);
-      leftEl.textContent = "LEFT: " + fmtMeters(left);
-      fillEl.style.width = percent + "%";
-      pointsCountEl.textContent = pathPoints.length;
-
-      if (extra.status) statusEl.textContent = extra.status;
-      if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + "m";
-      if (extra.speed != null) speedEl.textContent = extra.speed.toFixed(1) + " km/h";
-    }
-
     async function pushState(status, extra = {}) {
       if (!authed) await ensureAuth();
       await update(stateRef, {
@@ -675,107 +485,93 @@
       });
     }
 
+    let lastMapKey = "";
+
+    function setMapBlank(){
+      mapFrame.src = "about:blank";
+      mapInfo.textContent = "Map: idle";
+      lastMapKey = "";
+    }
+
+    function setMap(lat, lon){
+      const now = Date.now();
+      if (now - lastMapUpdate < 5000) return; // Обновляем карту раз в 5 секунд
+      
+      const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+      if (key === lastMapKey) return;
+      
+      lastMapKey = key;
+      lastMapUpdate = now;
+
+      const zoom = 18;
+      const src = `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}&z=${zoom}&t=k&output=embed&hl=ru&_=${now}`;
+
+      mapFrame.src = src;
+      mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    }
+
     async function startGPS() {
       if (!authed) await ensureAuth();
       if (!("geolocation" in navigator)) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
-      log("🟢 GPS запущен");
       statusEl.textContent = "starting";
+      anchorPoint = null;
       lastUpdateTime = 0;
-      gpsStartTime = Date.now();
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
         const { latitude, longitude, accuracy, speed } = pos.coords;
         const now = Date.now();
-        const timeSinceStart = (now - gpsStartTime) / 1000;
 
-        currentPosition = { lat: latitude, lon: longitude, accuracy, time: now };
-
-        // Прогрев 5 секунд
-        if (timeSinceStart < 5) {
-          log(`⏳ Прогрев GPS... ${(5 - timeSinceStart).toFixed(0)}с`);
-          updateUI({ status: "warming up", acc: accuracy });
-          drawMap(pathPoints, currentPosition);
-          return;
-        }
+        // Обновляем карту
+        setMap(latitude, longitude);
 
         // Проверка точности
         if (!accuracy || accuracy > MIN_ACCURACY) {
-          log(`❌ Плохой сигнал: ${accuracy?.toFixed(1)}m`, 'warn');
-          updateUI({ status: "weak gps", acc: accuracy });
-          drawMap(pathPoints, currentPosition);
-          
+          updateUI({ status: "weak signal", acc: accuracy, speed });
           if (now - lastUpdateTime > 2000) {
-            await pushState("weak gps", { accuracy, latitude, longitude });
+            await pushState("weak gps", { accuracy, latitude, longitude, speed: speed ?? 0 });
             lastUpdateTime = now;
           }
           return;
         }
 
-        // Первая точка
-        if (!lastSavedPoint) {
-          lastSavedPoint = { lat: latitude, lon: longitude, time: now };
-          pathPoints.push(lastSavedPoint);
-          log(`🎯 Первая точка установлена`);
-          updateUI({ status: "tracking", acc: accuracy, speed: 0 });
-          drawMap(pathPoints, currentPosition);
+        // Устанавливаем опорную точку
+        if (!anchorPoint) {
+          anchorPoint = { lat: latitude, lon: longitude, time: now };
+          updateUI({ status: "anchor set", acc: accuracy, speed });
           return;
         }
 
-        // Проверяем время с последней сохранённой точки
-        const timeDiff = (now - lastSavedPoint.time) / 1000;
-        
-        if (timeDiff < MIN_TIME_BETWEEN_POINTS / 1000) {
-          // Слишком рано, просто обновляем UI
-          updateUI({ status: "tracking", acc: accuracy, speed: speed ? speed * 3.6 : 0 });
-          drawMap(pathPoints, currentPosition);
-          intervalEl.textContent = `${timeDiff.toFixed(1)}с (ждём ${(MIN_TIME_BETWEEN_POINTS / 1000).toFixed(0)}с)`;
+        // Проверяем только раз в UPDATE_INTERVAL
+        if (now - lastUpdateTime < UPDATE_INTERVAL) {
+          updateUI({ status: "tracking", acc: accuracy, speed });
           return;
         }
 
-        // Считаем расстояние
-        const distance = haversine(lastSavedPoint.lat, lastSavedPoint.lon, latitude, longitude);
-        const calculatedSpeed = distance / timeDiff;
-        const speedKmh = calculatedSpeed * 3.6;
-
-        log(`📏 Дистанция: ${distance.toFixed(2)}m за ${timeDiff.toFixed(1)}с, скорость: ${speedKmh.toFixed(1)}км/ч`);
-
-        // Проверки
-        if (distance < MIN_DISTANCE_FOR_COUNT) {
-          log(`⚠️ Слишком мало: ${distance.toFixed(2)}m < ${MIN_DISTANCE_FOR_COUNT}m`, 'warn');
-          lastStepEl.textContent = `${distance.toFixed(2)}m (мало)`;
-        } else if (calculatedSpeed > MAX_REASONABLE_SPEED) {
-          log(`⚠️ Слишком быстро: ${speedKmh.toFixed(1)}км/ч`, 'warn');
-          lastStepEl.textContent = `${distance.toFixed(2)}m (быстро)`;
-        } else {
-          // ВСЁ ОК - ДОБАВЛЯЕМ!
-          distanceMeters += distance;
-          lastSavedPoint = { lat: latitude, lon: longitude, time: now };
-          pathPoints.push(lastSavedPoint);
-          
-          log(`✅ +${distance.toFixed(2)}m! Всего: ${distanceMeters.toFixed(1)}m`);
-          lastStepEl.textContent = `${distance.toFixed(2)}m ✓`;
-        }
-
-        intervalEl.textContent = `${timeDiff.toFixed(1)}с`;
-        updateUI({ status: "tracking", acc: accuracy, speed: speedKmh });
-        drawMap(pathPoints, currentPosition);
+        // Считаем дистанцию от опорной точки
+        const distFromAnchor = haversine(anchorPoint.lat, anchorPoint.lon, latitude, longitude);
         
-        if (now - lastUpdateTime > 1000) {
-          await pushState("tracking", { accuracy, latitude, longitude, speed: speedKmh });
-          lastUpdateTime = now;
+        // Если прошли достаточно - добавляем и переставляем якорь
+        if (distFromAnchor >= 5) { // Минимум 5 метров
+          distanceMeters += distFromAnchor;
+          anchorPoint = { lat: latitude, lon: longitude, time: now };
+          console.log(`✅ +${distFromAnchor.toFixed(1)}m, всего: ${distanceMeters.toFixed(1)}m`);
         }
+
+        updateUI({ status: "tracking", acc: accuracy, speed });
+        lastUpdateTime = now;
+        
+        await pushState("tracking", { accuracy, speed: speed ?? 0, latitude, longitude });
 
       }, async (err) => {
-        log(`❌ GPS ошибка: ${err.message}`, 'error');
         console.error("GPS error:", err);
         statusEl.textContent = "gps error";
         await pushState("gps error", { error: err.message || "unknown" });
       }, { 
         enableHighAccuracy: true, 
         maximumAge: 0,
-        timeout: 20000
+        timeout: 27000
       });
     }
 
@@ -783,35 +579,28 @@
       if (watchId != null) { 
         navigator.geolocation.clearWatch(watchId); 
         watchId = null; 
-        log("🛑 GPS остановлен");
       }
-      await pushState("stopped", { latitude: null, longitude: null, accuracy: null });
+      setMapBlank();
+      await pushState("stopped", { latitude: null, longitude: null, accuracy: null, speed: null });
       statusEl.textContent = "stopped";
     }
 
     async function resetGPS() {
-      if (!confirm("Сбросить дистанцию и путь?")) return;
+      if (!confirm("Сбросить дистанцию?")) return;
       distanceMeters = 0;
-      pathPoints = [];
-      lastSavedPoint = null;
-      currentPosition = null;
-      debugLogEl.innerHTML = '';
-      log("🔄 Сброс выполнен");
-      lastStepEl.textContent = '-';
-      intervalEl.textContent = '-';
+      anchorPoint = null;
       updateUI({ status: "reset", acc: null, speed: null });
-      drawMap(pathPoints, currentPosition);
+      setMapBlank();
       await update(stateRef, {
         distanceMeters: 0, status: "reset", updatedAt: Date.now(),
-        latitude: null, longitude: null, accuracy: null
+        latitude: null, longitude: null, accuracy: null, speed: null
       });
     }
 
     startBtn.onclick = startGPS;
-    stopBtn.onclick = stopGPS;
+    stopBtn.onclick  = stopGPS;
     resetBtn.onclick = resetGPS;
 
-    // ===== Compass =====
     const needleEl = document.getElementById("needle");
     function degToDir(deg) {
       const dirs = ["N","NE","E","SE","S","SW","W","NW"];
@@ -840,20 +629,21 @@
       } catch {}
     }
 
-    // Subscribe state
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
       if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
 
-      updateUI({ status: s.status || "idle", acc: s.accuracy ?? null });
+      updateUI({ status: s.status || "idle", acc: s.accuracy ?? null, speed: s.speed ?? null });
+
+      if (typeof s.latitude === "number" && typeof s.longitude === "number") {
+        setMap(s.latitude, s.longitude);
+      }
     });
 
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
-    log("✅ Приложение запущено");
-    log("ℹ️ Точки сохраняются каждые 3 секунды при движении ≥3м");
   </script>
 </body>
 </html>
