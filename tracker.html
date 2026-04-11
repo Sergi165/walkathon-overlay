@@ -193,6 +193,16 @@
       align-items: center;
       justify-content: center;
     }
+
+    .debug {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      font-size: 11px;
+      font-family: monospace;
+      color: #39ff14;
+    }
   </style>
 </head>
 <body>
@@ -225,6 +235,7 @@
       </div>
 
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
+      <div class="debug" id="debug">Ожидание...</div>
     </div>
 
     <div class="card compass-card">
@@ -268,8 +279,6 @@
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
-    const MIN_ACCURACY = 25;
-    const UPDATE_INTERVAL = 2000; // Обновление каждые 2 секунды
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -284,6 +293,7 @@
     const speedEl = document.getElementById("speed");
     const headingTextEl = document.getElementById("headingText");
     const authInfoEl = document.getElementById("authInfo");
+    const debugEl = document.getElementById("debug");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
@@ -442,11 +452,10 @@
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
     let watchId = null;
-    let anchorPoint = null; // Опорная точка для измерения
+    let lastPoint = null;
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
-    let lastMapUpdate = 0;
 
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
@@ -494,17 +503,12 @@
     }
 
     function setMap(lat, lon){
-      const now = Date.now();
-      if (now - lastMapUpdate < 5000) return; // Обновляем карту раз в 5 секунд
-      
       const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
       if (key === lastMapKey) return;
-      
       lastMapKey = key;
-      lastMapUpdate = now;
 
       const zoom = 18;
-      const src = `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}&z=${zoom}&t=k&output=embed&hl=ru&_=${now}`;
+      const src = `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}&z=${zoom}&t=k&output=embed&hl=ru`;
 
       mapFrame.src = src;
       mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
@@ -516,57 +520,43 @@
       if (watchId != null) return;
 
       statusEl.textContent = "starting";
-      anchorPoint = null;
+      lastPoint = null;
       lastUpdateTime = 0;
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
         const { latitude, longitude, accuracy, speed } = pos.coords;
         const now = Date.now();
 
-        // Обновляем карту
         setMap(latitude, longitude);
 
-        // Проверка точности
-        if (!accuracy || accuracy > MIN_ACCURACY) {
-          updateUI({ status: "weak signal", acc: accuracy, speed });
-          if (now - lastUpdateTime > 2000) {
-            await pushState("weak gps", { accuracy, latitude, longitude, speed: speed ?? 0 });
-            lastUpdateTime = now;
+        const point = { lat: latitude, lon: longitude, time: now };
+
+        if (lastPoint) {
+          const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
+          
+          // ДОБАВЛЯЕМ ВСЁ БЕЗ ФИЛЬТРОВ
+          if (step > 0) {
+            distanceMeters += step;
+            debugEl.textContent = `Последний шаг: ${step.toFixed(2)}m | Всего: ${distanceMeters.toFixed(1)}m | Точность: ${accuracy?.toFixed(1)}m`;
+            console.log(`+${step.toFixed(2)}m`);
           }
-          return;
+        } else {
+          debugEl.textContent = `Первая точка установлена | Точность: ${accuracy?.toFixed(1)}m`;
         }
 
-        // Устанавливаем опорную точку
-        if (!anchorPoint) {
-          anchorPoint = { lat: latitude, lon: longitude, time: now };
-          updateUI({ status: "anchor set", acc: accuracy, speed });
-          return;
-        }
-
-        // Проверяем только раз в UPDATE_INTERVAL
-        if (now - lastUpdateTime < UPDATE_INTERVAL) {
-          updateUI({ status: "tracking", acc: accuracy, speed });
-          return;
-        }
-
-        // Считаем дистанцию от опорной точки
-        const distFromAnchor = haversine(anchorPoint.lat, anchorPoint.lon, latitude, longitude);
-        
-        // Если прошли достаточно - добавляем и переставляем якорь
-        if (distFromAnchor >= 5) { // Минимум 5 метров
-          distanceMeters += distFromAnchor;
-          anchorPoint = { lat: latitude, lon: longitude, time: now };
-          console.log(`✅ +${distFromAnchor.toFixed(1)}m, всего: ${distanceMeters.toFixed(1)}m`);
-        }
+        lastPoint = point;
 
         updateUI({ status: "tracking", acc: accuracy, speed });
-        lastUpdateTime = now;
         
-        await pushState("tracking", { accuracy, speed: speed ?? 0, latitude, longitude });
+        if (now - lastUpdateTime > 1000) {
+          await pushState("tracking", { accuracy, speed: speed ?? 0, latitude, longitude });
+          lastUpdateTime = now;
+        }
 
       }, async (err) => {
         console.error("GPS error:", err);
         statusEl.textContent = "gps error";
+        debugEl.textContent = `Ошибка: ${err.message}`;
         await pushState("gps error", { error: err.message || "unknown" });
       }, { 
         enableHighAccuracy: true, 
@@ -588,7 +578,8 @@
     async function resetGPS() {
       if (!confirm("Сбросить дистанцию?")) return;
       distanceMeters = 0;
-      anchorPoint = null;
+      lastPoint = null;
+      debugEl.textContent = "Сброшено";
       updateUI({ status: "reset", acc: null, speed: null });
       setMapBlank();
       await update(stateRef, {
