@@ -124,7 +124,6 @@
       gap: 0;
     }
     
-    /* Preview вверху */
     body.chat-fullscreen .sticky-preview {
       position: relative;
       top: 0;
@@ -141,7 +140,6 @@
       border-radius: 8px;
     }
     
-    /* Чат в середине */
     body.chat-fullscreen .chat-card {
       order: 2;
       flex: 1 1 auto;
@@ -167,7 +165,6 @@
       padding: 8px 10px;
     }
     
-    /* Компас + карта внизу */
     body.chat-fullscreen .compass-card {
       order: 3;
       flex: 0 0 auto;
@@ -229,14 +226,29 @@
       justify-content: center;
     }
 
-    .warming-indicator {
-      background: rgba(255, 165, 0, 0.2);
-      border: 1px solid rgba(255, 165, 0, 0.5);
+    .debug-log {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--line);
       border-radius: 8px;
       padding: 8px;
       margin-top: 8px;
-      font-size: 12px;
-      color: #ffb347;
+      font-size: 11px;
+      font-family: monospace;
+      max-height: 150px;
+      overflow-y: auto;
+      color: #8ae68a;
+    }
+    
+    .debug-log div {
+      margin: 2px 0;
+    }
+    
+    .debug-log .error {
+      color: #ff6b6b;
+    }
+    
+    .debug-log .warn {
+      color: #ffa94d;
     }
   </style>
 </head>
@@ -265,10 +277,6 @@
         <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
       </div>
 
-      <div id="warmingUp" class="warming-indicator" style="display:none;">
-        🔄 Прогрев GPS... Подождите стабильного сигнала
-      </div>
-
       <div class="row" style="margin-top:12px">
         <button class="primary" id="startBtn" disabled>Start GPS</button>
         <button class="ok" id="stopBtn" disabled>Stop</button>
@@ -276,6 +284,8 @@
       </div>
 
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
+      
+      <div class="debug-log" id="debugLog"></div>
     </div>
 
     <!-- COMPASS + MAP -->
@@ -316,18 +326,16 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
-    // Twitch preview parent must match current domain
     const parent = location.hostname;
     document.getElementById("twitchPreview").src =
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
-    const MIN_ACCURACY = 25; // Уменьшил порог для лучшей точности
-    const MIN_STEP_METERS = 1; // Минимальный шаг 1 метр
-    const MAX_STEP_METERS = 50; // Максимум 50м между точками
-    const MAX_SPEED_MPS = 8; // Максимум 8 м/с (~29 км/ч)
-    const GPS_WARMUP_TIME = 10000; // 10 секунд прогрева GPS
-    const MIN_POINTS_FOR_TRACKING = 3; // Минимум точек перед началом подсчета
+    const MIN_ACCURACY = 30;
+    const MIN_STEP_METERS = 0.5;
+    const MAX_STEP_METERS = 100;
+    const MAX_SPEED_KMH = 25;
+    const GPS_WARMUP_SECONDS = 5;
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -342,7 +350,7 @@
     const speedEl = document.getElementById("speed");
     const headingTextEl = document.getElementById("headingText");
     const authInfoEl = document.getElementById("authInfo");
-    const warmingUpEl = document.getElementById("warmingUp");
+    const debugLogEl = document.getElementById("debugLog");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
@@ -350,6 +358,22 @@
 
     const mapFrame = document.getElementById("mapFrame");
     const mapInfo  = document.getElementById("mapInfo");
+
+    // Debug logger
+    function log(msg, type = 'info') {
+      const div = document.createElement('div');
+      const time = new Date().toLocaleTimeString();
+      div.textContent = `[${time}] ${msg}`;
+      if (type === 'error') div.className = 'error';
+      if (type === 'warn') div.className = 'warn';
+      debugLogEl.insertBefore(div, debugLogEl.firstChild);
+      
+      while (debugLogEl.children.length > 20) {
+        debugLogEl.removeChild(debugLogEl.lastChild);
+      }
+      
+      console.log(msg);
+    }
 
     // ===== Chat Fullscreen Toggle =====
     const chatCard = document.getElementById("chatCard");
@@ -510,9 +534,7 @@
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
     let gpsStartTime = 0;
-    let isGpsWarmedUp = false;
-    let goodPointsCount = 0;
-    let recentPoints = []; // История последних точек для фильтрации
+    let updateCount = 0;
 
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
@@ -569,7 +591,7 @@
       lastMapKey = key;
       lastMapAt = now;
 
-      const zoom = 16;
+      const zoom = 17;
       const src =
         `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}` +
         `&z=${zoom}&t=k&output=embed&hl=ru&_=${now}`;
@@ -578,59 +600,34 @@
       mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
-    // Проверка валидности точки
-    function isPointValid(point, prevPoint) {
-      if (!prevPoint) return true;
-      
-      const distance = haversine(prevPoint.lat, prevPoint.lon, point.lat, point.lon);
-      const timeDiff = (point.time - prevPoint.time) / 1000;
-      
-      if (timeDiff < 0.5) return false; // Слишком быстрые обновления
-      
-      const speed = distance / timeDiff;
-      
-      // Фильтр по скорости
-      if (speed > MAX_SPEED_MPS) {
-        console.log(`✗ Точка отброшена: скорость ${(speed * 3.6).toFixed(1)} км/ч`);
-        return false;
-      }
-      
-      // Фильтр по расстоянию
-      if (distance > MAX_STEP_METERS) {
-        console.log(`✗ Точка отброшена: расстояние ${distance.toFixed(1)}м`);
-        return false;
-      }
-      
-      return true;
-    }
-
     async function startGPS() {
       if (!authed) await ensureAuth();
       if (!("geolocation" in navigator)) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
+      log("🟢 GPS запущен");
       statusEl.textContent = "starting";
       lastPoint = null;
       lastUpdateTime = 0;
       gpsStartTime = Date.now();
-      isGpsWarmedUp = false;
-      goodPointsCount = 0;
-      recentPoints = [];
-      
-      warmingUpEl.style.display = 'block';
+      updateCount = 0;
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
         const { latitude, longitude, accuracy, speed } = pos.coords;
         const now = Date.now();
-        const timeSinceStart = now - gpsStartTime;
+        const timeSinceStart = (now - gpsStartTime) / 1000;
+        
+        updateCount++;
+        
+        log(`📍 Update #${updateCount}: acc=${accuracy?.toFixed(1)}m, speed=${speed ? (speed * 3.6).toFixed(1) : 'null'}km/h`);
 
         setMap(latitude, longitude);
 
-        // Период прогрева GPS
-        if (timeSinceStart < GPS_WARMUP_TIME) {
-          const secondsLeft = Math.ceil((GPS_WARMUP_TIME - timeSinceStart) / 1000);
-          warmingUpEl.textContent = `🔄 Прогрев GPS... ${secondsLeft}с (точность: ${accuracy?.toFixed(0)}м)`;
-          updateUI({ status: "warming up", acc: accuracy, speed });
+        // Период прогрева
+        if (timeSinceStart < GPS_WARMUP_SECONDS) {
+          const remaining = (GPS_WARMUP_SECONDS - timeSinceStart).toFixed(0);
+          log(`⏳ Прогрев GPS... ${remaining}с`, 'warn');
+          updateUI({ status: `warmup ${remaining}s`, acc: accuracy, speed });
           
           if (now - lastUpdateTime > 2000) {
             await pushState("warming up", { accuracy, latitude, longitude, speed: speed ?? 0 });
@@ -639,14 +636,9 @@
           return;
         }
 
-        // GPS прогрет, но скрываем индикатор только при хорошем сигнале
-        if (!isGpsWarmedUp && accuracy && accuracy < MIN_ACCURACY) {
-          isGpsWarmedUp = true;
-          warmingUpEl.style.display = 'none';
-        }
-
         // Проверка точности
-        if (accuracy && accuracy > MIN_ACCURACY) {
+        if (!accuracy || accuracy > MIN_ACCURACY) {
+          log(`❌ Слабый сигнал: ${accuracy?.toFixed(1)}m`, 'error');
           updateUI({ status: "weak gps", acc: accuracy, speed });
           
           if (now - lastUpdateTime > 2000) {
@@ -656,50 +648,35 @@
           return;
         }
 
-        const point = { lat: latitude, lon: longitude, time: now, accuracy };
-        
-        // Добавляем в историю
-        recentPoints.push(point);
-        if (recentPoints.length > 5) recentPoints.shift();
+        const point = { lat: latitude, lon: longitude, time: now };
 
-        // Накапливаем хорошие точки перед началом трекинга
-        if (goodPointsCount < MIN_POINTS_FOR_TRACKING) {
-          if (accuracy < MIN_ACCURACY) {
-            goodPointsCount++;
-            lastPoint = point; // Запоминаем точку для следующего сравнения
-          }
-          
-          updateUI({ 
-            status: `calibrating (${goodPointsCount}/${MIN_POINTS_FOR_TRACKING})`, 
-            acc: accuracy, 
-            speed 
-          });
-          
-          if (now - lastUpdateTime > 2000) {
-            await pushState("calibrating", { accuracy, latitude, longitude, speed: speed ?? 0 });
-            lastUpdateTime = now;
-          }
-          return;
-        }
-
-        // Начинаем трекинг
-        if (lastPoint && isPointValid(point, lastPoint)) {
+        if (lastPoint) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
           const timeDiff = (now - lastPoint.time) / 1000;
           const calculatedSpeed = timeDiff > 0 ? step / timeDiff : 0;
+          const speedKmh = calculatedSpeed * 3.6;
           
-          // Добавляем шаг если он больше минимального порога
-          if (step >= MIN_STEP_METERS) {
-            distanceMeters += step;
-            console.log(`✓ Добавлено: ${step.toFixed(2)}м, скорость: ${(calculatedSpeed * 3.6).toFixed(1)} км/ч, точность: ${accuracy.toFixed(1)}м`);
+          log(`📏 Шаг: ${step.toFixed(2)}m, время: ${timeDiff.toFixed(1)}s, скорость: ${speedKmh.toFixed(1)}km/h`);
+          
+          // Проверки
+          if (step < MIN_STEP_METERS) {
+            log(`⚠️  Шаг слишком мал: ${step.toFixed(2)}m < ${MIN_STEP_METERS}m`, 'warn');
+          } else if (step > MAX_STEP_METERS) {
+            log(`⚠️  Шаг слишком большой: ${step.toFixed(2)}m > ${MAX_STEP_METERS}m`, 'warn');
+          } else if (speedKmh > MAX_SPEED_KMH) {
+            log(`⚠️  Скорость слишком высокая: ${speedKmh.toFixed(1)}km/h > ${MAX_SPEED_KMH}km/h`, 'warn');
           } else {
-            console.log(`• Шаг слишком мал: ${step.toFixed(2)}м`);
+            // ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ - ДОБАВЛЯЕМ!
+            distanceMeters += step;
+            log(`✅ ДОБАВЛЕНО ${step.toFixed(2)}m! Всего: ${distanceMeters.toFixed(1)}m`);
           }
+        } else {
+          log(`🎯 Первая точка установлена`);
         }
 
         lastPoint = point;
 
-        updateUI({ status: "tracking", acc: accuracy, speed });
+        updateUI({ status: "tracking", acc: accuracy, speed: speed ?? calculatedSpeed });
         
         if (now - lastUpdateTime > 1000) {
           await pushState("tracking", { accuracy, speed: speed ?? 0, latitude, longitude });
@@ -707,9 +684,9 @@
         }
 
       }, async (err) => {
+        log(`❌ GPS ошибка: ${err.message}`, 'error');
         console.error("GPS error:", err);
         statusEl.textContent = "gps error";
-        warmingUpEl.style.display = 'none';
         await pushState("gps error", { error: err.message || "unknown" });
       }, { 
         enableHighAccuracy: true, 
@@ -722,8 +699,8 @@
       if (watchId != null) { 
         navigator.geolocation.clearWatch(watchId); 
         watchId = null; 
+        log("🛑 GPS остановлен");
       }
-      warmingUpEl.style.display = 'none';
       setMapBlank();
       await pushState("stopped", { latitude: null, longitude: null, accuracy: null, speed: null });
       statusEl.textContent = "stopped";
@@ -733,9 +710,9 @@
       if (!confirm("Сбросить дистанцию и локацию?")) return;
       distanceMeters = 0;
       lastPoint = null;
-      goodPointsCount = 0;
-      recentPoints = [];
-      isGpsWarmedUp = false;
+      updateCount = 0;
+      debugLogEl.innerHTML = '';
+      log("🔄 Сброс выполнен");
       updateUI({ status: "reset", acc: null, speed: null });
       setMapBlank();
       await update(stateRef, {
@@ -793,6 +770,7 @@
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
+    log("✅ Приложение запущено");
   </script>
 </body>
 </html>
