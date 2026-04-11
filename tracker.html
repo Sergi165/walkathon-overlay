@@ -228,6 +228,16 @@
       align-items: center;
       justify-content: center;
     }
+
+    .warming-indicator {
+      background: rgba(255, 165, 0, 0.2);
+      border: 1px solid rgba(255, 165, 0, 0.5);
+      border-radius: 8px;
+      padding: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #ffb347;
+    }
   </style>
 </head>
 <body>
@@ -253,6 +263,10 @@
         <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">-</div></div>
         <div class="stat"><div class="k">Speed</div><div class="v" id="speed">-</div></div>
         <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
+      </div>
+
+      <div id="warmingUp" class="warming-indicator" style="display:none;">
+        🔄 Прогрев GPS... Подождите стабильного сигнала
       </div>
 
       <div class="row" style="margin-top:12px">
@@ -308,9 +322,12 @@
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
-    const MIN_ACCURACY = 35;
-    const MIN_STEP_METERS = 2;
-    const MAX_STEP_METERS = 120;
+    const MIN_ACCURACY = 25; // Уменьшил порог для лучшей точности
+    const MIN_STEP_METERS = 1; // Минимальный шаг 1 метр
+    const MAX_STEP_METERS = 50; // Максимум 50м между точками
+    const MAX_SPEED_MPS = 8; // Максимум 8 м/с (~29 км/ч)
+    const GPS_WARMUP_TIME = 10000; // 10 секунд прогрева GPS
+    const MIN_POINTS_FOR_TRACKING = 3; // Минимум точек перед началом подсчета
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -325,6 +342,7 @@
     const speedEl = document.getElementById("speed");
     const headingTextEl = document.getElementById("headingText");
     const authInfoEl = document.getElementById("authInfo");
+    const warmingUpEl = document.getElementById("warmingUp");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
@@ -491,6 +509,10 @@
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
+    let gpsStartTime = 0;
+    let isGpsWarmedUp = false;
+    let goodPointsCount = 0;
+    let recentPoints = []; // История последних точек для фильтрации
 
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
@@ -556,6 +578,32 @@
       mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
+    // Проверка валидности точки
+    function isPointValid(point, prevPoint) {
+      if (!prevPoint) return true;
+      
+      const distance = haversine(prevPoint.lat, prevPoint.lon, point.lat, point.lon);
+      const timeDiff = (point.time - prevPoint.time) / 1000;
+      
+      if (timeDiff < 0.5) return false; // Слишком быстрые обновления
+      
+      const speed = distance / timeDiff;
+      
+      // Фильтр по скорости
+      if (speed > MAX_SPEED_MPS) {
+        console.log(`✗ Точка отброшена: скорость ${(speed * 3.6).toFixed(1)} км/ч`);
+        return false;
+      }
+      
+      // Фильтр по расстоянию
+      if (distance > MAX_STEP_METERS) {
+        console.log(`✗ Точка отброшена: расстояние ${distance.toFixed(1)}м`);
+        return false;
+      }
+      
+      return true;
+    }
+
     async function startGPS() {
       if (!authed) await ensureAuth();
       if (!("geolocation" in navigator)) return alert("Geolocation не поддерживается");
@@ -564,13 +612,40 @@
       statusEl.textContent = "starting";
       lastPoint = null;
       lastUpdateTime = 0;
+      gpsStartTime = Date.now();
+      isGpsWarmedUp = false;
+      goodPointsCount = 0;
+      recentPoints = [];
+      
+      warmingUpEl.style.display = 'block';
 
       watchId = navigator.geolocation.watchPosition(async (pos) => {
         const { latitude, longitude, accuracy, speed } = pos.coords;
         const now = Date.now();
+        const timeSinceStart = now - gpsStartTime;
 
         setMap(latitude, longitude);
 
+        // Период прогрева GPS
+        if (timeSinceStart < GPS_WARMUP_TIME) {
+          const secondsLeft = Math.ceil((GPS_WARMUP_TIME - timeSinceStart) / 1000);
+          warmingUpEl.textContent = `🔄 Прогрев GPS... ${secondsLeft}с (точность: ${accuracy?.toFixed(0)}м)`;
+          updateUI({ status: "warming up", acc: accuracy, speed });
+          
+          if (now - lastUpdateTime > 2000) {
+            await pushState("warming up", { accuracy, latitude, longitude, speed: speed ?? 0 });
+            lastUpdateTime = now;
+          }
+          return;
+        }
+
+        // GPS прогрет, но скрываем индикатор только при хорошем сигнале
+        if (!isGpsWarmedUp && accuracy && accuracy < MIN_ACCURACY) {
+          isGpsWarmedUp = true;
+          warmingUpEl.style.display = 'none';
+        }
+
+        // Проверка точности
         if (accuracy && accuracy > MIN_ACCURACY) {
           updateUI({ status: "weak gps", acc: accuracy, speed });
           
@@ -581,23 +656,44 @@
           return;
         }
 
-        const point = { lat: latitude, lon: longitude, time: now };
+        const point = { lat: latitude, lon: longitude, time: now, accuracy };
+        
+        // Добавляем в историю
+        recentPoints.push(point);
+        if (recentPoints.length > 5) recentPoints.shift();
 
-        if (lastPoint) {
+        // Накапливаем хорошие точки перед началом трекинга
+        if (goodPointsCount < MIN_POINTS_FOR_TRACKING) {
+          if (accuracy < MIN_ACCURACY) {
+            goodPointsCount++;
+            lastPoint = point; // Запоминаем точку для следующего сравнения
+          }
+          
+          updateUI({ 
+            status: `calibrating (${goodPointsCount}/${MIN_POINTS_FOR_TRACKING})`, 
+            acc: accuracy, 
+            speed 
+          });
+          
+          if (now - lastUpdateTime > 2000) {
+            await pushState("calibrating", { accuracy, latitude, longitude, speed: speed ?? 0 });
+            lastUpdateTime = now;
+          }
+          return;
+        }
+
+        // Начинаем трекинг
+        if (lastPoint && isPointValid(point, lastPoint)) {
           const step = haversine(lastPoint.lat, lastPoint.lon, point.lat, point.lon);
           const timeDiff = (now - lastPoint.time) / 1000;
-          
           const calculatedSpeed = timeDiff > 0 ? step / timeDiff : 0;
           
-          if (step >= MIN_STEP_METERS && step <= MAX_STEP_METERS) {
-            if (calculatedSpeed < 15 || timeDiff > 5) {
-              distanceMeters += step;
-              console.log(`✓ Добавлено: ${step.toFixed(2)}м, скорость: ${(calculatedSpeed * 3.6).toFixed(1)} км/ч`);
-            } else {
-              console.log(`✗ Пропущено (слишком быстро): ${step.toFixed(2)}м за ${timeDiff.toFixed(1)}с`);
-            }
-          } else if (step > 0) {
-            console.log(`✗ Пропущено (вне диапазона): ${step.toFixed(2)}м`);
+          // Добавляем шаг если он больше минимального порога
+          if (step >= MIN_STEP_METERS) {
+            distanceMeters += step;
+            console.log(`✓ Добавлено: ${step.toFixed(2)}м, скорость: ${(calculatedSpeed * 3.6).toFixed(1)} км/ч, точность: ${accuracy.toFixed(1)}м`);
+          } else {
+            console.log(`• Шаг слишком мал: ${step.toFixed(2)}м`);
           }
         }
 
@@ -613,16 +709,21 @@
       }, async (err) => {
         console.error("GPS error:", err);
         statusEl.textContent = "gps error";
+        warmingUpEl.style.display = 'none';
         await pushState("gps error", { error: err.message || "unknown" });
       }, { 
         enableHighAccuracy: true, 
         maximumAge: 0,
-        timeout: 15000
+        timeout: 20000
       });
     }
 
     async function stopGPS() {
-      if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+      if (watchId != null) { 
+        navigator.geolocation.clearWatch(watchId); 
+        watchId = null; 
+      }
+      warmingUpEl.style.display = 'none';
       setMapBlank();
       await pushState("stopped", { latitude: null, longitude: null, accuracy: null, speed: null });
       statusEl.textContent = "stopped";
@@ -632,6 +733,9 @@
       if (!confirm("Сбросить дистанцию и локацию?")) return;
       distanceMeters = 0;
       lastPoint = null;
+      goodPointsCount = 0;
+      recentPoints = [];
+      isGpsWarmedUp = false;
       updateUI({ status: "reset", acc: null, speed: null });
       setMapBlank();
       await update(stateRef, {
