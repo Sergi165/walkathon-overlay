@@ -193,6 +193,27 @@
       align-items: center;
       justify-content: center;
     }
+
+    .info {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(57, 255, 20, 0.1);
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      font-size: 11px;
+    }
+
+    .debug {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      font-size: 10px;
+      font-family: monospace;
+      color: #8ae68a;
+      max-height: 100px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -205,7 +226,7 @@
     </div>
 
     <div class="card">
-      <div class="title">Walkathon Tracker (Smart Filtering)</div>
+      <div class="title">Walkathon Tracker (Vincenty Formula)</div>
       <div class="big" id="done">0m</div>
       <div class="muted" id="left">LEFT: 0m</div>
 
@@ -214,9 +235,11 @@
       <div class="meta" style="margin-top:10px">
         <div class="stat"><div class="k">Status</div><div class="v" id="status">auth...</div></div>
         <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">-</div></div>
-        <div class="stat"><div class="k">Speed</div><div class="v" id="speed">-</div></div>
-        <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
+        <div class="stat"><div class="k">Bearing</div><div class="v" id="bearing">-</div></div>
+        <div class="stat"><div class="k">Points</div><div class="v" id="pointsCount">0</div></div>
       </div>
+
+      <div class="info" id="info">Ожидание GPS...</div>
 
       <div class="row" style="margin-top:12px">
         <button class="primary" id="startBtn" disabled>Start GPS</button>
@@ -225,6 +248,7 @@
       </div>
 
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
+      <div class="debug" id="debug"></div>
     </div>
 
     <div class="card compass-card">
@@ -279,9 +303,11 @@
     const fillEl = document.getElementById("fill");
     const statusEl = document.getElementById("status");
     const accEl = document.getElementById("acc");
-    const speedEl = document.getElementById("speed");
-    const headingTextEl = document.getElementById("headingText");
+    const bearingEl = document.getElementById("bearing");
+    const pointsCountEl = document.getElementById("pointsCount");
     const authInfoEl = document.getElementById("authInfo");
+    const infoEl = document.getElementById("info");
+    const debugEl = document.getElementById("debug");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
@@ -289,6 +315,12 @@
 
     const mapFrame = document.getElementById("mapFrame");
     const mapInfo  = document.getElementById("mapInfo");
+
+    function log(msg) {
+      const time = new Date().toLocaleTimeString();
+      debugEl.innerHTML = `[${time}] ${msg}<br>` + debugEl.innerHTML.split('<br>').slice(0, 10).join('<br>');
+      console.log(msg);
+    }
 
     const chatCard = document.getElementById("chatCard");
     const exitFullscreenBtn = document.getElementById("exitFullscreenBtn");
@@ -432,46 +464,147 @@
     statusEl.textContent = "auth...";
     authInfoEl.textContent = "Auth: signing in...";
     ensureAuth().catch((e)=>{
-      console.log("Auth error", e);
+      log("Auth error: " + e.message);
       authInfoEl.textContent = "Auth: error";
       statusEl.textContent = "auth error";
     });
 
-    // Kalman Filter для сглаживания координат
-    class KalmanFilter {
-      constructor() {
-        this.variance = -1;
-        this.lat = 0;
-        this.lng = 0;
-        this.timestamp = 0;
-      }
+    // ===== VINCENTY INVERSE FORMULA - МАКСИМАЛЬНАЯ ТОЧНОСТЬ =====
+    // Использует эллипсоид WGS-84 (форма Земли)
+    function vincentyDistance(lat1, lon1, lat2, lon2) {
+      // WGS-84 эллипсоид параметры
+      const a = 6378137.0; // большая полуось (экваториальный радиус)
+      const b = 6356752.314245; // малая полуось (полярный радиус)
+      const f = 1 / 298.257223563; // сплюснутость
 
-      process(lat, lng, accuracy, timestampMs) {
-        if (accuracy < 1) accuracy = 1;
+      const toRad = (deg) => deg * Math.PI / 180;
+      const toDeg = (rad) => rad * 180 / Math.PI;
+
+      const φ1 = toRad(lat1);
+      const φ2 = toRad(lat2);
+      const λ1 = toRad(lon1);
+      const λ2 = toRad(lon2);
+
+      const L = λ2 - λ1; // разница долгот
+
+      const U1 = Math.atan((1 - f) * Math.tan(φ1)); // приведённая широта
+      const U2 = Math.atan((1 - f) * Math.tan(φ2));
+
+      const sinU1 = Math.sin(U1);
+      const cosU1 = Math.cos(U1);
+      const sinU2 = Math.sin(U2);
+      const cosU2 = Math.cos(U2);
+
+      let λ = L;
+      let λPrev;
+      let iterLimit = 100;
+      let cosSqα, sinσ, cos2σM, cosσ, σ;
+
+      do {
+        const sinλ = Math.sin(λ);
+        const cosλ = Math.cos(λ);
+
+        const sinSqσ = (cosU2 * sinλ) ** 2 + 
+                       (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) ** 2;
         
-        if (this.variance < 0) {
-          // Первая точка
-          this.lat = lat;
-          this.lng = lng;
-          this.variance = accuracy * accuracy;
-          this.timestamp = timestampMs;
-        } else {
-          // Обновление
-          const timeDelta = timestampMs - this.timestamp;
-          if (timeDelta > 0) {
-            this.variance += timeDelta / 1000 * 10; // Увеличиваем неопределённость со временем
-            this.timestamp = timestampMs;
-          }
+        sinσ = Math.sqrt(sinSqσ);
+        
+        if (sinσ === 0) return 0; // совпадающие точки
 
-          const K = this.variance / (this.variance + accuracy * accuracy);
-          this.lat += K * (lat - this.lat);
-          this.lng += K * (lng - this.lng);
-          this.variance = (1 - K) * this.variance;
-        }
+        cosσ = sinU1 * sinU2 + cosU1 * cosU2 * cosλ;
+        σ = Math.atan2(sinσ, cosσ);
 
-        return { lat: this.lat, lng: this.lng };
+        const sinα = cosU1 * cosU2 * sinλ / sinσ;
+        cosSqα = 1 - sinα ** 2;
+
+        cos2σM = cosσ - 2 * sinU1 * sinU2 / cosSqα;
+        
+        if (isNaN(cos2σM)) cos2σM = 0; // экваториальная линия
+
+        const C = f / 16 * cosSqα * (4 + f * (4 - 3 * cosSqα));
+
+        λPrev = λ;
+        λ = L + (1 - C) * f * sinα * 
+            (σ + C * sinσ * (cos2σM + C * cosσ * (-1 + 2 * cos2σM ** 2)));
+
+      } while (Math.abs(λ - λPrev) > 1e-12 && --iterLimit > 0);
+
+      if (iterLimit === 0) {
+        // Не сошлось - используем простую формулу
+        log("⚠️ Vincenty не сошлась, используется Haversine");
+        return haversineDistance(lat1, lon1, lat2, lon2);
       }
+
+      const uSq = cosSqα * (a ** 2 - b ** 2) / (b ** 2);
+      const A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
+      const B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
+
+      const Δσ = B * sinσ * (cos2σM + B / 4 * 
+                (cosσ * (-1 + 2 * cos2σM ** 2) - 
+                B / 6 * cos2σM * (-3 + 4 * sinσ ** 2) * (-3 + 4 * cos2σM ** 2)));
+
+      const s = b * A * (σ - Δσ); // расстояние в метрах
+
+      return s;
     }
+
+    // Запасная формула Haversine
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371008.8;
+      const toRad = (deg) => deg * Math.PI / 180;
+      
+      const φ1 = toRad(lat1);
+      const φ2 = toRad(lat2);
+      const Δφ = toRad(lat2 - lat1);
+      const Δλ = toRad(lon2 - lon1);
+      
+      const a = Math.sin(Δφ / 2) ** 2 +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) ** 2;
+      
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      
+      return R * c;
+    }
+
+    // Вычисление азимута (bearing) - направление движения
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+      const toRad = (deg) => deg * Math.PI / 180;
+      const toDeg = (rad) => rad * 180 / Math.PI;
+
+      const φ1 = toRad(lat1);
+      const φ2 = toRad(lat2);
+      const Δλ = toRad(lon2 - lon1);
+
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) -
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+
+      let θ = Math.atan2(y, x);
+      let bearing = (toDeg(θ) + 360) % 360; // нормализация 0-360
+
+      // Конвертируем в направление
+      const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+      const index = Math.round(bearing / 45) % 8;
+      
+      return {
+        degrees: bearing,
+        direction: directions[index]
+      };
+    }
+
+    // Тест формул
+    (function testFormulas() {
+      const moscow = { lat: 55.7558, lon: 37.6173 };
+      const spb = { lat: 59.9311, lon: 30.3609 };
+      
+      const distVincenty = vincentyDistance(moscow.lat, moscow.lon, spb.lat, spb.lon);
+      const distHaversine = haversineDistance(moscow.lat, moscow.lon, spb.lat, spb.lon);
+      const bearing = calculateBearing(moscow.lat, moscow.lon, spb.lat, spb.lon);
+      
+      log(`🧪 Москва-СПб: Vincenty=${(distVincenty/1000).toFixed(2)}км, Haversine=${(distHaversine/1000).toFixed(2)}км`);
+      log(`🧭 Направление: ${bearing.degrees.toFixed(1)}° (${bearing.direction})`);
+    })();
 
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
@@ -479,10 +612,8 @@
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
-    
-    const kalman = new KalmanFilter();
-    let lastFilteredPoint = null;
-    let locationBuffer = [];
+    let lastPoint = null;
+    let totalPoints = 0;
 
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
@@ -491,24 +622,11 @@
       doneEl.textContent = fmtMeters(distanceMeters);
       leftEl.textContent = "LEFT: " + fmtMeters(left);
       fillEl.style.width = percent + "%";
+      pointsCountEl.textContent = totalPoints;
 
       if (extra.status) statusEl.textContent = extra.status;
       if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + "m";
-      if (extra.speed != null && !Number.isNaN(extra.speed)) {
-        speedEl.textContent = (extra.speed * 3.6).toFixed(1) + " km/h";
-      }
-    }
-
-    function haversine(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const toRad = d => d * Math.PI / 180;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-        Math.sin(dLon / 2) ** 2;
-      return 2 * R * Math.asin(Math.sqrt(a));
+      if (extra.bearing) bearingEl.textContent = `${extra.bearing.degrees.toFixed(0)}° ${extra.bearing.direction}`;
     }
 
     async function pushState(status, extra = {}) {
@@ -538,106 +656,129 @@
       const src = `https://www.google.com/maps?q=${encodeURIComponent(lat + "," + lon)}&z=${zoom}&t=k&output=embed&hl=ru`;
 
       mapFrame.src = src;
-      mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      mapInfo.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     }
 
     async function startGPS() {
       if (!authed) await ensureAuth();
-      if (!("geolocation" in navigator)) return alert("Geolocation не поддерживается");
+      if (!navigator.geolocation) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
+      log("🟢 GPS запущен (Vincenty formula)");
       statusEl.textContent = "starting";
-      lastFilteredPoint = null;
-      lastUpdateTime = 0;
-      locationBuffer = [];
+      lastPoint = null;
+      totalPoints = 0;
+      infoEl.textContent = "Запуск GPS...";
 
-      watchId = navigator.geolocation.watchPosition(async (pos) => {
-        const { latitude, longitude, accuracy, speed } = pos.coords;
-        const now = Date.now();
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      };
 
-        // Применяем фильтр Калмана
-        const filtered = kalman.process(latitude, longitude, accuracy || 50, now);
+      watchId = navigator.geolocation.watchPosition(
+        async (position) => {
+          const { latitude, longitude, accuracy, speed } = position.coords;
+          const timestamp = position.timestamp;
+          const now = Date.now();
 
-        setMap(filtered.lat, filtered.lng);
+          totalPoints++;
+          log(`📍 #${totalPoints}: [${latitude.toFixed(6)}, ${longitude.toFixed(6)}] acc=${accuracy?.toFixed(1)}m`);
 
-        // Буферизация точек
-        locationBuffer.push({ 
-          lat: filtered.lat, 
-          lng: filtered.lng, 
-          time: now,
-          accuracy: accuracy || 50
-        });
+          setMap(latitude, longitude);
 
-        // Храним последние 5 секунд
-        locationBuffer = locationBuffer.filter(p => now - p.time < 5000);
-
-        if (lastFilteredPoint && locationBuffer.length >= 3) {
-          // Считаем среднюю скорость по буферу
-          let totalDist = 0;
-          for (let i = 1; i < locationBuffer.length; i++) {
-            totalDist += haversine(
-              locationBuffer[i-1].lat, locationBuffer[i-1].lng,
-              locationBuffer[i].lat, locationBuffer[i].lng
-            );
+          if (!lastPoint) {
+            lastPoint = { lat: latitude, lon: longitude, time: timestamp, accuracy: accuracy || 999 };
+            infoEl.textContent = `Первая точка (точность: ${accuracy?.toFixed(1)}m)`;
+            updateUI({ status: "tracking", acc: accuracy });
+            log(`🎯 Базовая точка установлена`);
+            return;
           }
-          const avgSpeed = totalDist / ((now - locationBuffer[0].time) / 1000);
 
-          // Расстояние от последней засчитанной точки
-          const step = haversine(
-            lastFilteredPoint.lat, lastFilteredPoint.lng,
-            filtered.lat, filtered.lng
+          // Используем Vincenty для максимальной точности
+          const distance = vincentyDistance(
+            lastPoint.lat, lastPoint.lon,
+            latitude, longitude
           );
 
-          // Засчитываем если:
-          // 1. Прошло достаточно расстояния (зависит от точности)
-          // 2. Скорость разумная (меньше 10 м/с = 36 км/ч)
-          const minStep = Math.max(accuracy || 10, 5);
-          
-          if (step >= minStep && avgSpeed < 10 && step < 100) {
-            distanceMeters += step;
-            lastFilteredPoint = { lat: filtered.lat, lng: filtered.lng, time: now };
-            console.log(`✅ +${step.toFixed(1)}m, всего: ${distanceMeters.toFixed(0)}m`);
+          // Вычисляем направление движения
+          const bearing = calculateBearing(
+            lastPoint.lat, lastPoint.lon,
+            latitude, longitude
+          );
+
+          const timeDiff = (timestamp - lastPoint.time) / 1000;
+          const calculatedSpeed = timeDiff > 0 ? distance / timeDiff : 0;
+
+          log(`📏 Dist=${distance.toFixed(2)}m, Δt=${timeDiff.toFixed(1)}s, Speed=${(calculatedSpeed*3.6).toFixed(1)}km/h, θ=${bearing.degrees.toFixed(0)}°`);
+
+          const currentAcc = accuracy || 50;
+          const prevAcc = lastPoint.accuracy || 50;
+          const minDistance = Math.max(currentAcc + prevAcc, 3);
+
+          if (currentAcc > 50) {
+            log(`❌ Плохая точность: ${currentAcc.toFixed(1)}m`);
+            infoEl.textContent = `⚠️ Точность: ${currentAcc.toFixed(0)}m`;
+          } else if (distance < minDistance) {
+            log(`⏸️ Мало: ${distance.toFixed(2)}m < ${minDistance.toFixed(1)}m`);
+            infoEl.textContent = `⏸️ ${distance.toFixed(1)}m (мин: ${minDistance.toFixed(1)}m)`;
+          } else if (calculatedSpeed > 10) {
+            log(`❌ Быстро: ${(calculatedSpeed * 3.6).toFixed(1)}km/h`);
+            infoEl.textContent = `⚠️ Скорость: ${(calculatedSpeed * 3.6).toFixed(1)}km/h`;
+          } else if (distance > 100) {
+            log(`❌ Скачок: ${distance.toFixed(1)}m`);
+            infoEl.textContent = `⚠️ Скачок: ${distance.toFixed(0)}m`;
+          } else {
+            // ЗАСЧИТЫВАЕМ!
+            distanceMeters += distance;
+            lastPoint = { lat: latitude, lon: longitude, time: timestamp, accuracy: currentAcc };
+            log(`✅ +${distance.toFixed(2)}m → TOTAL: ${distanceMeters.toFixed(1)}m`);
+            infoEl.textContent = `✅ +${distance.toFixed(1)}m | ${bearing.direction} ${bearing.degrees.toFixed(0)}° | ${distanceMeters.toFixed(0)}m`;
           }
-        } else if (!lastFilteredPoint) {
-          lastFilteredPoint = { lat: filtered.lat, lng: filtered.lng, time: now };
-        }
 
-        updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
+          updateUI({ status: "tracking", acc: accuracy, bearing: bearing });
+
+          if (now - lastUpdateTime > 2000) {
+            await pushState("tracking", { accuracy, latitude, longitude, speed: speed ?? 0 });
+            lastUpdateTime = now;
+          }
+        },
         
-        if (now - lastUpdateTime > 2000) {
-          await pushState("tracking", { accuracy, latitude, longitude, speed: speed ?? 0 });
-          lastUpdateTime = now;
-        }
+        async (error) => {
+          log(`❌ GPS: ${error.message}`);
+          statusEl.textContent = "gps error";
+          infoEl.textContent = `Ошибка: ${error.message}`;
+          await pushState("gps error", { error: error.message });
+        },
+        
+        options
+      );
 
-      }, async (err) => {
-        console.error("GPS error:", err);
-        statusEl.textContent = "gps error";
-        await pushState("gps error", { error: err.message || "unknown" });
-      }, { 
-        enableHighAccuracy: true, 
-        maximumAge: 0,
-        timeout: 27000
-      });
+      log(`🔍 watchPosition ID: ${watchId}`);
     }
 
     async function stopGPS() {
       if (watchId != null) { 
-        navigator.geolocation.clearWatch(watchId); 
+        navigator.geolocation.clearWatch(watchId);
+        log(`🛑 GPS остановлен`);
         watchId = null; 
       }
       setMapBlank();
-      await pushState("stopped", { latitude: null, longitude: null, accuracy: null, speed: null });
+      await pushState("stopped");
       statusEl.textContent = "stopped";
+      infoEl.textContent = "GPS остановлен";
     }
 
     async function resetGPS() {
       if (!confirm("Сбросить дистанцию?")) return;
       distanceMeters = 0;
-      lastFilteredPoint = null;
-      locationBuffer = [];
-      kalman.variance = -1;
-      updateUI({ status: "reset", acc: null, speed: null });
+      lastPoint = null;
+      totalPoints = 0;
+      debugEl.innerHTML = '';
+      log("🔄 Сброс");
+      updateUI({ status: "reset", acc: null });
       setMapBlank();
+      infoEl.textContent = "Сброшено";
       await update(stateRef, {
         distanceMeters: 0, status: "reset", updatedAt: Date.now(),
         latitude: null, longitude: null, accuracy: null, speed: null
@@ -649,10 +790,6 @@
     resetBtn.onclick = resetGPS;
 
     const needleEl = document.getElementById("needle");
-    function degToDir(deg) {
-      const dirs = ["N","NE","E","SE","S","SW","W","NW"];
-      return dirs[Math.round(deg / 45) % 8];
-    }
     let smoothHeading = 0, hasHeading = false;
     function angleDelta(a, b) { return (b - a + 540) % 360 - 180; }
 
@@ -661,7 +798,6 @@
       if (!hasHeading) { smoothHeading = target; hasHeading = true; }
       else { const d = angleDelta(smoothHeading, target); smoothHeading = (smoothHeading + d * 0.15 + 360) % 360; }
       needleEl.style.transform = `translate(-50%, -100%) rotate(${smoothHeading}deg)`;
-      headingTextEl.textContent = degToDir(smoothHeading);
     }
 
     async function initCompass() {
@@ -681,7 +817,7 @@
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
       if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
 
-      updateUI({ status: s.status || "idle", acc: s.accuracy ?? null, speed: s.speed ?? null });
+      updateUI({ status: s.status || "idle", acc: s.accuracy ?? null });
 
       if (typeof s.latitude === "number" && typeof s.longitude === "number") {
         setMap(s.latitude, s.longitude);
@@ -691,6 +827,7 @@
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
+    log("✅ Готов (Vincenty + Bearing)");
   </script>
 </body>
 </html>
