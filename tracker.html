@@ -193,21 +193,6 @@
       align-items: center;
       justify-content: center;
     }
-
-    .step-info {
-      margin-top: 8px;
-      padding: 12px;
-      background: rgba(57, 255, 20, 0.1);
-      border: 1px solid var(--green);
-      border-radius: 8px;
-    }
-
-    .step-big {
-      font-size: 28px;
-      font-weight: 900;
-      color: var(--green);
-      margin-bottom: 4px;
-    }
   </style>
 </head>
 <body>
@@ -220,26 +205,21 @@
     </div>
 
     <div class="card">
-      <div class="title">Walkathon Tracker (Pedometer Mode)</div>
+      <div class="title">Walkathon Tracker (Smart Filtering)</div>
       <div class="big" id="done">0m</div>
       <div class="muted" id="left">LEFT: 0m</div>
 
       <div class="bar"><div class="fill" id="fill"></div></div>
 
-      <div class="step-info">
-        <div class="step-big" id="stepCount">0 шагов</div>
-        <div class="muted">~0.75м за шаг</div>
-      </div>
-
       <div class="meta" style="margin-top:10px">
         <div class="stat"><div class="k">Status</div><div class="v" id="status">auth...</div></div>
-        <div class="stat"><div class="k">GPS Accuracy</div><div class="v" id="acc">-</div></div>
-        <div class="stat"><div class="k">Step/min</div><div class="v" id="cadence">-</div></div>
+        <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">-</div></div>
+        <div class="stat"><div class="k">Speed</div><div class="v" id="speed">-</div></div>
         <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
       </div>
 
       <div class="row" style="margin-top:12px">
-        <button class="primary" id="startBtn" disabled>Start Tracking</button>
+        <button class="primary" id="startBtn" disabled>Start GPS</button>
         <button class="ok" id="stopBtn" disabled>Stop</button>
         <button class="danger" id="resetBtn" disabled>Reset</button>
       </div>
@@ -288,7 +268,6 @@
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
-    const STEP_LENGTH = 0.75; // 75 см средний шаг
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -300,10 +279,9 @@
     const fillEl = document.getElementById("fill");
     const statusEl = document.getElementById("status");
     const accEl = document.getElementById("acc");
-    const cadenceEl = document.getElementById("cadence");
+    const speedEl = document.getElementById("speed");
     const headingTextEl = document.getElementById("headingText");
     const authInfoEl = document.getElementById("authInfo");
-    const stepCountEl = document.getElementById("stepCount");
 
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
@@ -459,40 +437,84 @@
       statusEl.textContent = "auth error";
     });
 
+    // Kalman Filter для сглаживания координат
+    class KalmanFilter {
+      constructor() {
+        this.variance = -1;
+        this.lat = 0;
+        this.lng = 0;
+        this.timestamp = 0;
+      }
+
+      process(lat, lng, accuracy, timestampMs) {
+        if (accuracy < 1) accuracy = 1;
+        
+        if (this.variance < 0) {
+          // Первая точка
+          this.lat = lat;
+          this.lng = lng;
+          this.variance = accuracy * accuracy;
+          this.timestamp = timestampMs;
+        } else {
+          // Обновление
+          const timeDelta = timestampMs - this.timestamp;
+          if (timeDelta > 0) {
+            this.variance += timeDelta / 1000 * 10; // Увеличиваем неопределённость со временем
+            this.timestamp = timestampMs;
+          }
+
+          const K = this.variance / (this.variance + accuracy * accuracy);
+          this.lat += K * (lat - this.lat);
+          this.lng += K * (lng - this.lng);
+          this.variance = (1 - K) * this.variance;
+        }
+
+        return { lat: this.lat, lng: this.lng };
+      }
+    }
+
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
     let watchId = null;
-    let stepCount = 0;
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
-    let isTracking = false;
     
-    // Pedometer variables
-    let lastAcceleration = { x: 0, y: 0, z: 0 };
-    let stepTimes = [];
+    const kalman = new KalmanFilter();
+    let lastFilteredPoint = null;
+    let locationBuffer = [];
 
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
       const percent = goalMeters > 0 ? Math.min((distanceMeters / goalMeters) * 100, 100) : 0;
 
-      distanceMeters = stepCount * STEP_LENGTH;
-
       doneEl.textContent = fmtMeters(distanceMeters);
       leftEl.textContent = "LEFT: " + fmtMeters(left);
       fillEl.style.width = percent + "%";
-      stepCountEl.textContent = `${stepCount} шагов`;
 
       if (extra.status) statusEl.textContent = extra.status;
       if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + "m";
-      if (extra.cadence != null) cadenceEl.textContent = Math.round(extra.cadence);
+      if (extra.speed != null && !Number.isNaN(extra.speed)) {
+        speedEl.textContent = (extra.speed * 3.6).toFixed(1) + " km/h";
+      }
+    }
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = d => d * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
     }
 
     async function pushState(status, extra = {}) {
       if (!authed) await ensureAuth();
       await update(stateRef, {
         distanceMeters: Math.round(distanceMeters),
-        stepCount,
         status,
         updatedAt: Date.now(),
         ...extra
@@ -519,130 +541,112 @@
       mapInfo.textContent = `Map: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
-    function handleMotion(event) {
-      if (!isTracking) return;
-
-      const acc = event.accelerationIncludingGravity;
-      if (!acc) return;
-
-      const x = acc.x || 0;
-      const y = acc.y || 0;
-      const z = acc.z || 0;
-
-      // Вычисляем общее ускорение
-      const magnitude = Math.sqrt(x*x + y*y + z*z);
-      const lastMagnitude = Math.sqrt(
-        lastAcceleration.x**2 + 
-        lastAcceleration.y**2 + 
-        lastAcceleration.z**2
-      );
-
-      // Определяем шаг по резкому изменению ускорения
-      const delta = Math.abs(magnitude - lastMagnitude);
-      
-      if (delta > 8) { // Порог для определения шага
-        const now = Date.now();
-        
-        // Фильтр: шаги не чаще чем раз в 300мс (200 шагов/мин максимум)
-        if (stepTimes.length === 0 || (now - stepTimes[stepTimes.length - 1]) > 300) {
-          stepCount++;
-          stepTimes.push(now);
-          
-          // Храним только последние 10 шагов для расчёта каденса
-          if (stepTimes.length > 10) stepTimes.shift();
-          
-          // Считаем каденс (шагов в минуту)
-          if (stepTimes.length >= 2) {
-            const timeDiff = (stepTimes[stepTimes.length - 1] - stepTimes[0]) / 1000 / 60;
-            const cadence = (stepTimes.length - 1) / timeDiff;
-            updateUI({ cadence });
-          }
-          
-          updateUI();
-          console.log(`Шаг #${stepCount}, дельта: ${delta.toFixed(1)}`);
-        }
-      }
-
-      lastAcceleration = { x, y, z };
-    }
-
-    async function startTracking() {
+    async function startGPS() {
       if (!authed) await ensureAuth();
-      isTracking = true;
+      if (!("geolocation" in navigator)) return alert("Geolocation не поддерживается");
+      if (watchId != null) return;
 
-      // Запрашиваем разрешение на акселерометр (iOS)
-      if (typeof DeviceMotionEvent !== 'undefined' && 
-          typeof DeviceMotionEvent.requestPermission === 'function') {
-        try {
-          const permission = await DeviceMotionEvent.requestPermission();
-          if (permission !== 'granted') {
-            alert('Нужно разрешение на использование акселерометра');
-            return;
-          }
-        } catch (e) {
-          console.error('Permission error:', e);
-        }
-      }
+      statusEl.textContent = "starting";
+      lastFilteredPoint = null;
+      lastUpdateTime = 0;
+      locationBuffer = [];
 
-      // Слушаем акселерометр
-      window.addEventListener('devicemotion', handleMotion);
+      watchId = navigator.geolocation.watchPosition(async (pos) => {
+        const { latitude, longitude, accuracy, speed } = pos.coords;
+        const now = Date.now();
 
-      // Запускаем GPS для карты
-      if ("geolocation" in navigator) {
-        watchId = navigator.geolocation.watchPosition((pos) => {
-          const { latitude, longitude, accuracy } = pos.coords;
-          setMap(latitude, longitude);
-          updateUI({ status: "tracking", acc: accuracy });
-          
-          const now = Date.now();
-          if (now - lastUpdateTime > 2000) {
-            pushState("tracking", { accuracy, latitude, longitude });
-            lastUpdateTime = now;
-          }
-        }, null, { 
-          enableHighAccuracy: true, 
-          maximumAge: 5000
+        // Применяем фильтр Калмана
+        const filtered = kalman.process(latitude, longitude, accuracy || 50, now);
+
+        setMap(filtered.lat, filtered.lng);
+
+        // Буферизация точек
+        locationBuffer.push({ 
+          lat: filtered.lat, 
+          lng: filtered.lng, 
+          time: now,
+          accuracy: accuracy || 50
         });
-      }
 
-      statusEl.textContent = "tracking";
+        // Храним последние 5 секунд
+        locationBuffer = locationBuffer.filter(p => now - p.time < 5000);
+
+        if (lastFilteredPoint && locationBuffer.length >= 3) {
+          // Считаем среднюю скорость по буферу
+          let totalDist = 0;
+          for (let i = 1; i < locationBuffer.length; i++) {
+            totalDist += haversine(
+              locationBuffer[i-1].lat, locationBuffer[i-1].lng,
+              locationBuffer[i].lat, locationBuffer[i].lng
+            );
+          }
+          const avgSpeed = totalDist / ((now - locationBuffer[0].time) / 1000);
+
+          // Расстояние от последней засчитанной точки
+          const step = haversine(
+            lastFilteredPoint.lat, lastFilteredPoint.lng,
+            filtered.lat, filtered.lng
+          );
+
+          // Засчитываем если:
+          // 1. Прошло достаточно расстояния (зависит от точности)
+          // 2. Скорость разумная (меньше 10 м/с = 36 км/ч)
+          const minStep = Math.max(accuracy || 10, 5);
+          
+          if (step >= minStep && avgSpeed < 10 && step < 100) {
+            distanceMeters += step;
+            lastFilteredPoint = { lat: filtered.lat, lng: filtered.lng, time: now };
+            console.log(`✅ +${step.toFixed(1)}m, всего: ${distanceMeters.toFixed(0)}m`);
+          }
+        } else if (!lastFilteredPoint) {
+          lastFilteredPoint = { lat: filtered.lat, lng: filtered.lng, time: now };
+        }
+
+        updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
+        
+        if (now - lastUpdateTime > 2000) {
+          await pushState("tracking", { accuracy, latitude, longitude, speed: speed ?? 0 });
+          lastUpdateTime = now;
+        }
+
+      }, async (err) => {
+        console.error("GPS error:", err);
+        statusEl.textContent = "gps error";
+        await pushState("gps error", { error: err.message || "unknown" });
+      }, { 
+        enableHighAccuracy: true, 
+        maximumAge: 0,
+        timeout: 27000
+      });
     }
 
-    async function stopTracking() {
-      isTracking = false;
-      window.removeEventListener('devicemotion', handleMotion);
-      
+    async function stopGPS() {
       if (watchId != null) { 
         navigator.geolocation.clearWatch(watchId); 
         watchId = null; 
       }
-      
       setMapBlank();
-      await pushState("stopped");
+      await pushState("stopped", { latitude: null, longitude: null, accuracy: null, speed: null });
       statusEl.textContent = "stopped";
     }
 
-    async function resetTracking() {
-      if (!confirm("Сбросить шаги и дистанцию?")) return;
-      stepCount = 0;
+    async function resetGPS() {
+      if (!confirm("Сбросить дистанцию?")) return;
       distanceMeters = 0;
-      stepTimes = [];
-      updateUI({ status: "reset", acc: null, cadence: 0 });
+      lastFilteredPoint = null;
+      locationBuffer = [];
+      kalman.variance = -1;
+      updateUI({ status: "reset", acc: null, speed: null });
       setMapBlank();
       await update(stateRef, {
-        distanceMeters: 0,
-        stepCount: 0,
-        status: "reset", 
-        updatedAt: Date.now(),
-        latitude: null, 
-        longitude: null, 
-        accuracy: null
+        distanceMeters: 0, status: "reset", updatedAt: Date.now(),
+        latitude: null, longitude: null, accuracy: null, speed: null
       });
     }
 
-    startBtn.onclick = startTracking;
-    stopBtn.onclick = stopTracking;
-    resetBtn.onclick = resetTracking;
+    startBtn.onclick = startGPS;
+    stopBtn.onclick  = stopGPS;
+    resetBtn.onclick = resetGPS;
 
     const needleEl = document.getElementById("needle");
     function degToDir(deg) {
@@ -676,9 +680,8 @@
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
       if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
-      if (typeof s.stepCount === "number") stepCount = Number(s.stepCount || 0);
 
-      updateUI({ status: s.status || "idle", acc: s.accuracy ?? null });
+      updateUI({ status: s.status || "idle", acc: s.accuracy ?? null, speed: s.speed ?? null });
 
       if (typeof s.latitude === "number" && typeof s.longitude === "number") {
         setMap(s.latitude, s.longitude);
