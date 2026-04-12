@@ -128,7 +128,6 @@
       gap: 0;
     }
     
-    /* Preview в fullscreen - уменьшен */
     body.chat-fullscreen .sticky-preview {
       position: relative;
       top: 0;
@@ -137,11 +136,11 @@
       border: none;
       border-bottom: 1px solid var(--line);
       flex: 0 0 auto;
-      padding: 6px; /* Уменьшил с 8px */
+      padding: 6px;
     }
     
     body.chat-fullscreen .sticky-preview .stream-preview {
-      aspect-ratio: 16/4; /* Изменил с 16/5 на 16/4 - более узкий */
+      aspect-ratio: 16/4;
       border-radius: 6px;
     }
     
@@ -170,42 +169,41 @@
       padding: 8px 10px;
     }
     
-    /* Компас + карта в fullscreen - СИЛЬНО уменьшены */
     body.chat-fullscreen .compass-card {
       order: 3;
       flex: 0 0 auto;
       border-radius: 0;
       border: none;
-      padding: 6px; /* Уменьшил с 8px */
+      padding: 6px;
     }
 
     body.chat-fullscreen .compass {
-      gap: 6px; /* Уменьшил с 8px */
+      gap: 6px;
     }
 
     body.chat-fullscreen .rose {
-      width: 50px; /* Уменьшил с 60px */
+      width: 50px;
       height: 50px;
     }
 
     body.chat-fullscreen .needle {
-      height: 20px; /* Уменьшил с 24px */
+      height: 20px;
       width: 3px;
       transform-origin: center 15px;
     }
 
     body.chat-fullscreen .mapWrap {
-      height: 80px; /* Уменьшил с 100px */
+      height: 80px;
       min-width: 150px;
     }
 
     body.chat-fullscreen .compass-card .title {
-      font-size: 10px; /* Уменьшил с 11px */
+      font-size: 10px;
       margin-bottom: 4px;
     }
 
     body.chat-fullscreen .mapInfo {
-      font-size: 9px; /* Уменьшил с 11px */
+      font-size: 9px;
       margin-top: 3px;
     }
 
@@ -213,7 +211,7 @@
     body.chat-fullscreen .rose .e,
     body.chat-fullscreen .rose .s,
     body.chat-fullscreen .rose .w {
-      font-size: 9px; /* Уменьшил размер букв компаса */
+      font-size: 9px;
     }
 
     .exit-fullscreen-btn {
@@ -325,6 +323,17 @@
       `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
+
+    // ===== ANTI-JITTER CONFIGURATION =====
+    const GPS_CONFIG = {
+      MIN_ACCURACY: 30,           // Максимальная погрешность GPS (метры)
+      MIN_DISTANCE: 5,            // Минимальная дистанция для засчитывания (метры)
+      MAX_DISTANCE: 80,           // Максимальная дистанция между точками (метры)
+      MAX_SPEED: 8,               // Максимальная скорость м/с (~29 км/ч)
+      JITTER_THRESHOLD: 3,        // Порог дрожания GPS (метры)
+      MIN_TIME_BETWEEN: 2000,     // Минимум времени между точками (мс)
+      SMOOTHING_WINDOW: 5,        // Окно сглаживания координат
+    };
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
@@ -498,6 +507,7 @@
       statusEl.textContent = "auth error";
     });
 
+    // ===== VINCENTY FORMULA =====
     function vincentyDistance(lat1, lon1, lat2, lon2) {
       const a = 6378137.0;
       const b = 6356752.314245;
@@ -589,13 +599,55 @@
       return R * c;
     }
 
+    // ===== COORDINATE SMOOTHING (Anti-Jitter) =====
+    class CoordinateSmoothing {
+      constructor(windowSize = GPS_CONFIG.SMOOTHING_WINDOW) {
+        this.buffer = [];
+        this.windowSize = windowSize;
+      }
+
+      add(lat, lon, accuracy) {
+        this.buffer.push({ lat, lon, accuracy, weight: 1 / (accuracy || 1) });
+        if (this.buffer.length > this.windowSize) {
+          this.buffer.shift();
+        }
+      }
+
+      getSmoothed() {
+        if (this.buffer.length === 0) return null;
+        
+        // Взвешенное среднее (лучшая точность = больший вес)
+        let totalWeight = 0;
+        let sumLat = 0;
+        let sumLon = 0;
+
+        for (const p of this.buffer) {
+          sumLat += p.lat * p.weight;
+          sumLon += p.lon * p.weight;
+          totalWeight += p.weight;
+        }
+
+        return {
+          lat: sumLat / totalWeight,
+          lon: sumLon / totalWeight
+        };
+      }
+
+      reset() {
+        this.buffer = [];
+      }
+    }
+
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
     let watchId = null;
     let distanceMeters = 0;
     let goalMeters = DEFAULT_GOAL_METERS;
     let lastUpdateTime = 0;
-    let lastPoint = null;
+    let lastValidPoint = null;
+    let lastSaveTime = 0;
+    
+    const smoother = new CoordinateSmoothing();
 
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
@@ -645,9 +697,11 @@
       if (!navigator.geolocation) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
-      console.log("GPS started (Мурино, СПб)");
+      console.log("🚀 GPS started with anti-jitter filters");
       statusEl.textContent = "starting";
-      lastPoint = null;
+      lastValidPoint = null;
+      lastSaveTime = 0;
+      smoother.reset();
 
       const options = {
         enableHighAccuracy: true,
@@ -663,38 +717,95 @@
 
           setMap(latitude, longitude);
 
-          if (!lastPoint) {
-            lastPoint = { lat: latitude, lon: longitude, time: timestamp, accuracy: accuracy || 999 };
-            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
-            console.log("Base point set");
+          // ===== FILTER 1: Accuracy Check =====
+          if (!accuracy || accuracy > GPS_CONFIG.MIN_ACCURACY) {
+            console.log(`❌ Poor accuracy: ${accuracy?.toFixed(1)}m > ${GPS_CONFIG.MIN_ACCURACY}m`);
+            updateUI({ status: "weak signal", acc: accuracy, speed: 0 });
             return;
           }
 
+          // ===== ANTI-JITTER: Add to smoothing buffer =====
+          smoother.add(latitude, longitude, accuracy);
+          const smoothed = smoother.getSmoothed();
+
+          if (!smoothed) {
+            console.log("⏳ Collecting points for smoothing...");
+            updateUI({ status: "calibrating", acc: accuracy, speed: 0 });
+            return;
+          }
+
+          // ===== FILTER 2: First Point =====
+          if (!lastValidPoint) {
+            lastValidPoint = { 
+              lat: smoothed.lat, 
+              lon: smoothed.lon, 
+              time: timestamp, 
+              accuracy 
+            };
+            lastSaveTime = now;
+            console.log("🎯 Base point set (smoothed)");
+            updateUI({ status: "tracking", acc: accuracy, speed: 0 });
+            return;
+          }
+
+          // ===== FILTER 3: Time Between Points =====
+          const timeSinceLastSave = now - lastSaveTime;
+          if (timeSinceLastSave < GPS_CONFIG.MIN_TIME_BETWEEN) {
+            console.log(`⏱️ Too soon: ${(timeSinceLastSave/1000).toFixed(1)}s < ${GPS_CONFIG.MIN_TIME_BETWEEN/1000}s`);
+            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
+            return;
+          }
+
+          // ===== Calculate Distance (Vincenty) =====
           const distance = vincentyDistance(
-            lastPoint.lat, lastPoint.lon,
-            latitude, longitude
+            lastValidPoint.lat, lastValidPoint.lon,
+            smoothed.lat, smoothed.lon
           );
 
-          const timeDiff = (timestamp - lastPoint.time) / 1000;
+          const timeDiff = (timestamp - lastValidPoint.time) / 1000;
           const calculatedSpeed = timeDiff > 0 ? distance / timeDiff : 0;
 
-          const currentAcc = accuracy || 50;
-          const prevAcc = lastPoint.accuracy || 50;
-          const minDistance = Math.max(currentAcc + prevAcc, 3);
+          console.log(`📏 Distance: ${distance.toFixed(2)}m, Speed: ${(calculatedSpeed*3.6).toFixed(1)}km/h, Time: ${timeDiff.toFixed(1)}s`);
 
-          if (currentAcc > 50) {
-            console.log(`Low accuracy: ${currentAcc.toFixed(1)}m`);
-          } else if (distance < minDistance) {
-            console.log(`Too short: ${distance.toFixed(2)}m`);
-          } else if (calculatedSpeed > 10) {
-            console.log(`Too fast: ${(calculatedSpeed * 3.6).toFixed(1)}km/h`);
-          } else if (distance > 100) {
-            console.log(`Jump: ${distance.toFixed(1)}m`);
-          } else {
-            distanceMeters += distance;
-            lastPoint = { lat: latitude, lon: longitude, time: timestamp, accuracy: currentAcc };
-            console.log(`+${distance.toFixed(2)}m → ${distanceMeters.toFixed(1)}m`);
+          // ===== FILTER 4: Jitter Threshold =====
+          if (distance < GPS_CONFIG.JITTER_THRESHOLD) {
+            console.log(`🔇 Jitter filtered: ${distance.toFixed(2)}m < ${GPS_CONFIG.JITTER_THRESHOLD}m`);
+            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
+            return;
           }
+
+          // ===== FILTER 5: Minimum Distance =====
+          if (distance < GPS_CONFIG.MIN_DISTANCE) {
+            console.log(`⏸️ Too short: ${distance.toFixed(2)}m < ${GPS_CONFIG.MIN_DISTANCE}m`);
+            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
+            return;
+          }
+
+          // ===== FILTER 6: Maximum Distance =====
+          if (distance > GPS_CONFIG.MAX_DISTANCE) {
+            console.log(`❌ Jump too large: ${distance.toFixed(1)}m > ${GPS_CONFIG.MAX_DISTANCE}m`);
+            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
+            return;
+          }
+
+          // ===== FILTER 7: Speed Check =====
+          if (calculatedSpeed > GPS_CONFIG.MAX_SPEED) {
+            console.log(`❌ Too fast: ${(calculatedSpeed * 3.6).toFixed(1)}km/h > ${(GPS_CONFIG.MAX_SPEED*3.6).toFixed(0)}km/h`);
+            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
+            return;
+          }
+
+          // ===== ALL FILTERS PASSED - ADD DISTANCE! =====
+          distanceMeters += distance;
+          lastValidPoint = { 
+            lat: smoothed.lat, 
+            lon: smoothed.lon, 
+            time: timestamp, 
+            accuracy 
+          };
+          lastSaveTime = now;
+
+          console.log(`✅ +${distance.toFixed(2)}m → TOTAL: ${distanceMeters.toFixed(1)}m`);
 
           updateUI({ status: "tracking", acc: accuracy, speed: speed || calculatedSpeed });
 
@@ -718,8 +829,9 @@
       if (watchId != null) { 
         navigator.geolocation.clearWatch(watchId);
         watchId = null; 
-        console.log("GPS stopped");
+        console.log("🛑 GPS stopped");
       }
+      smoother.reset();
       setMapBlank();
       await pushState("stopped");
       statusEl.textContent = "stopped";
@@ -728,7 +840,9 @@
     async function resetGPS() {
       if (!confirm("Сбросить дистанцию?")) return;
       distanceMeters = 0;
-      lastPoint = null;
+      lastValidPoint = null;
+      lastSaveTime = 0;
+      smoother.reset();
       updateUI({ status: "reset", acc: null, speed: 0 });
       setMapBlank();
       await update(stateRef, {
@@ -784,7 +898,7 @@
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
-    console.log("📍 Location: Мурино (Бугры), Санкт-Петербург");
+    console.log("📍 Мурино, СПб | Anti-jitter: ON | Min distance: " + GPS_CONFIG.MIN_DISTANCE + "m");
   </script>
 </body>
 </html>
