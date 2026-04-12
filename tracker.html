@@ -82,8 +82,16 @@
       overflow: hidden;
       border: 1px solid var(--line);
       background:#000;
+      position: relative;
     }
-    .mapFrame{ width:100%; height:100%; border:0; }
+    
+    /* Статическая картинка карты вместо iframe */
+    .mapImage {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
 
     .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
     
@@ -283,14 +291,14 @@
     </div>
 
     <div class="card compass-card">
-      <div class="title">Compass + Yandex Maps</div>
+      <div class="title">Compass + Map (OpenStreetMap)</div>
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
           <div class="n">N</div><div class="e">E</div><div class="s">S</div><div class="w">W</div>
         </div>
         <div class="mapWrap">
-          <iframe class="mapFrame" id="mapFrame" src="about:blank" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+          <img class="mapImage" id="mapImage" src="" alt="Map" />
         </div>
       </div>
       <div class="muted mapInfo" style="margin-top:8px" id="mapInfo">Map: idle</div>
@@ -324,15 +332,14 @@
 
     const DEFAULT_GOAL_METERS = 25000;
 
-    // ===== ANTI-JITTER CONFIGURATION =====
     const GPS_CONFIG = {
-      MIN_ACCURACY: 30,           // Максимальная погрешность GPS (метры)
-      MIN_DISTANCE: 5,            // Минимальная дистанция для засчитывания (метры)
-      MAX_DISTANCE: 80,           // Максимальная дистанция между точками (метры)
-      MAX_SPEED: 8,               // Максимальная скорость м/с (~29 км/ч)
-      JITTER_THRESHOLD: 3,        // Порог дрожания GPS (метры)
-      MIN_TIME_BETWEEN: 2000,     // Минимум времени между точками (мс)
-      SMOOTHING_WINDOW: 5,        // Окно сглаживания координат
+      MIN_ACCURACY: 30,
+      MIN_DISTANCE: 5,
+      MAX_DISTANCE: 80,
+      MAX_SPEED: 8,
+      JITTER_THRESHOLD: 3,
+      MIN_TIME_BETWEEN: 2000,
+      SMOOTHING_WINDOW: 5,
     };
 
     const app = initializeApp(firebaseConfig);
@@ -353,7 +360,7 @@
     const stopBtn  = document.getElementById("stopBtn");
     const resetBtn = document.getElementById("resetBtn");
 
-    const mapFrame = document.getElementById("mapFrame");
+    const mapImage = document.getElementById("mapImage");
     const mapInfo  = document.getElementById("mapInfo");
 
     const chatCard = document.getElementById("chatCard");
@@ -507,7 +514,6 @@
       statusEl.textContent = "auth error";
     });
 
-    // ===== VINCENTY FORMULA =====
     function vincentyDistance(lat1, lon1, lat2, lon2) {
       const a = 6378137.0;
       const b = 6356752.314245;
@@ -599,7 +605,6 @@
       return R * c;
     }
 
-    // ===== COORDINATE SMOOTHING (Anti-Jitter) =====
     class CoordinateSmoothing {
       constructor(windowSize = GPS_CONFIG.SMOOTHING_WINDOW) {
         this.buffer = [];
@@ -616,7 +621,6 @@
       getSmoothed() {
         if (this.buffer.length === 0) return null;
         
-        // Взвешенное среднее (лучшая точность = больший вес)
         let totalWeight = 0;
         let sumLat = 0;
         let sumLon = 0;
@@ -675,21 +679,33 @@
     let lastMapKey = "";
 
     function setMapBlank(){
-      mapFrame.src = "about:blank";
+      mapImage.src = "";
       mapInfo.textContent = "Map: idle";
       lastMapKey = "";
     }
 
+    // OpenStreetMap Static API - БЫСТРО и ЛЕГКО!
     function setMap(lat, lon){
       const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
       if (key === lastMapKey) return;
       lastMapKey = key;
 
-      const zoom = 17;
-      const src = `https://yandex.ru/map-widget/v1/?ll=${lon}%2C${lat}&z=${zoom}&l=map&pt=${lon},${lat},pm2rdm`;
-
-      mapFrame.src = src;
-      mapInfo.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+      const zoom = 16;
+      const width = 400;
+      const height = 200;
+      
+      // Используем StaticMap API от OpenStreetMap
+      const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.005}%2C${lat-0.003}%2C${lon+0.005}%2C${lat+0.003}&layer=mapnik&marker=${lat}%2C${lon}`;
+      
+      // Или альтернатива - MapQuest StaticMap (быстрее):
+      // const src = `https://open.mapquestapi.com/staticmap/v5/map?locations=${lat},${lon}&size=${width},${height}&zoom=${zoom}&key=YOUR_KEY`;
+      
+      // Простая картинка через tile сервер (самое быстрое):
+      const tile_x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+      const tile_y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+      
+      mapImage.src = `https://tile.openstreetmap.org/${zoom}/${tile_x}/${tile_y}.png`;
+      mapInfo.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
     async function startGPS() {
@@ -697,7 +713,7 @@
       if (!navigator.geolocation) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
-      console.log("🚀 GPS started with anti-jitter filters");
+      console.log("🚀 GPS started (OpenStreetMap)");
       statusEl.textContent = "starting";
       lastValidPoint = null;
       lastSaveTime = 0;
@@ -717,24 +733,21 @@
 
           setMap(latitude, longitude);
 
-          // ===== FILTER 1: Accuracy Check =====
           if (!accuracy || accuracy > GPS_CONFIG.MIN_ACCURACY) {
-            console.log(`❌ Poor accuracy: ${accuracy?.toFixed(1)}m > ${GPS_CONFIG.MIN_ACCURACY}m`);
+            console.log(`❌ Poor accuracy: ${accuracy?.toFixed(1)}m`);
             updateUI({ status: "weak signal", acc: accuracy, speed: 0 });
             return;
           }
 
-          // ===== ANTI-JITTER: Add to smoothing buffer =====
           smoother.add(latitude, longitude, accuracy);
           const smoothed = smoother.getSmoothed();
 
           if (!smoothed) {
-            console.log("⏳ Collecting points for smoothing...");
+            console.log("⏳ Collecting points...");
             updateUI({ status: "calibrating", acc: accuracy, speed: 0 });
             return;
           }
 
-          // ===== FILTER 2: First Point =====
           if (!lastValidPoint) {
             lastValidPoint = { 
               lat: smoothed.lat, 
@@ -743,20 +756,17 @@
               accuracy 
             };
             lastSaveTime = now;
-            console.log("🎯 Base point set (smoothed)");
+            console.log("🎯 Base point set");
             updateUI({ status: "tracking", acc: accuracy, speed: 0 });
             return;
           }
 
-          // ===== FILTER 3: Time Between Points =====
           const timeSinceLastSave = now - lastSaveTime;
           if (timeSinceLastSave < GPS_CONFIG.MIN_TIME_BETWEEN) {
-            console.log(`⏱️ Too soon: ${(timeSinceLastSave/1000).toFixed(1)}s < ${GPS_CONFIG.MIN_TIME_BETWEEN/1000}s`);
             updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
             return;
           }
 
-          // ===== Calculate Distance (Vincenty) =====
           const distance = vincentyDistance(
             lastValidPoint.lat, lastValidPoint.lon,
             smoothed.lat, smoothed.lon
@@ -765,37 +775,32 @@
           const timeDiff = (timestamp - lastValidPoint.time) / 1000;
           const calculatedSpeed = timeDiff > 0 ? distance / timeDiff : 0;
 
-          console.log(`📏 Distance: ${distance.toFixed(2)}m, Speed: ${(calculatedSpeed*3.6).toFixed(1)}km/h, Time: ${timeDiff.toFixed(1)}s`);
+          console.log(`📏 ${distance.toFixed(2)}m, ${(calculatedSpeed*3.6).toFixed(1)}km/h`);
 
-          // ===== FILTER 4: Jitter Threshold =====
           if (distance < GPS_CONFIG.JITTER_THRESHOLD) {
-            console.log(`🔇 Jitter filtered: ${distance.toFixed(2)}m < ${GPS_CONFIG.JITTER_THRESHOLD}m`);
+            console.log(`🔇 Jitter: ${distance.toFixed(2)}m`);
             updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
             return;
           }
 
-          // ===== FILTER 5: Minimum Distance =====
           if (distance < GPS_CONFIG.MIN_DISTANCE) {
-            console.log(`⏸️ Too short: ${distance.toFixed(2)}m < ${GPS_CONFIG.MIN_DISTANCE}m`);
+            console.log(`⏸️ Too short: ${distance.toFixed(2)}m`);
             updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
             return;
           }
 
-          // ===== FILTER 6: Maximum Distance =====
           if (distance > GPS_CONFIG.MAX_DISTANCE) {
-            console.log(`❌ Jump too large: ${distance.toFixed(1)}m > ${GPS_CONFIG.MAX_DISTANCE}m`);
+            console.log(`❌ Jump: ${distance.toFixed(1)}m`);
             updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
             return;
           }
 
-          // ===== FILTER 7: Speed Check =====
           if (calculatedSpeed > GPS_CONFIG.MAX_SPEED) {
-            console.log(`❌ Too fast: ${(calculatedSpeed * 3.6).toFixed(1)}km/h > ${(GPS_CONFIG.MAX_SPEED*3.6).toFixed(0)}km/h`);
+            console.log(`❌ Too fast: ${(calculatedSpeed * 3.6).toFixed(1)}km/h`);
             updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
             return;
           }
 
-          // ===== ALL FILTERS PASSED - ADD DISTANCE! =====
           distanceMeters += distance;
           lastValidPoint = { 
             lat: smoothed.lat, 
@@ -805,7 +810,7 @@
           };
           lastSaveTime = now;
 
-          console.log(`✅ +${distance.toFixed(2)}m → TOTAL: ${distanceMeters.toFixed(1)}m`);
+          console.log(`✅ +${distance.toFixed(2)}m → ${distanceMeters.toFixed(1)}m`);
 
           updateUI({ status: "tracking", acc: accuracy, speed: speed || calculatedSpeed });
 
@@ -898,7 +903,7 @@
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
-    console.log("📍 Мурино, СПб | Anti-jitter: ON | Min distance: " + GPS_CONFIG.MIN_DISTANCE + "m");
+    console.log("📍 OpenStreetMap | Fast & Light");
   </script>
 </body>
 </html>
