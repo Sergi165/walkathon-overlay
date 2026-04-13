@@ -45,6 +45,22 @@
       will-change: transform, opacity;
       pointer-events: none;
       border: 0;
+      overflow: hidden;
+    }
+
+    .ovItem img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .ovItem iframe {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      border: none;
     }
 
     /* ===== Cards ===== */
@@ -376,16 +392,20 @@
     }
 
     function makeElForItem(it) {
+      const container = document.createElement("div");
+      container.className = "ovItem";
+      
       if (it.type === "yt") {
         const f = document.createElement("iframe");
-        f.className = "ovItem";
         f.allow = "autoplay; encrypted-media";
         f.frameBorder = "0";
-        return f;
+        container.appendChild(f);
+      } else {
+        const img = document.createElement("img");
+        container.appendChild(img);
       }
-      const img = document.createElement("img");
-      img.className = "ovItem";
-      return img;
+      
+      return container;
     }
 
     function upsertItem(id, it) {
@@ -423,11 +443,12 @@
         el.style.height = "";
       }
 
+      const child = el.firstElementChild;
       if (wantType === "yt") {
         const src = buildYouTubeSrc(it.ytId || "");
-        if (el.src !== src) el.src = src;
+        if (child.src !== src) child.src = src;
       } else {
-        el.src = it.url || "";
+        child.src = it.url || "";
       }
     }
 
