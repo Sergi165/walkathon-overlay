@@ -85,13 +85,12 @@
       position: relative;
     }
     
-    /* Google Maps iframe - БЕЗ API ключа! */
     .mapFrame {
       width: 100%;
       height: 100%;
       border: 0;
       display: block;
-      filter: invert(90%) hue-rotate(180deg); /* Тёмная тема */
+      filter: invert(90%) hue-rotate(180deg);
     }
 
     .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
@@ -269,7 +268,7 @@
     </div>
 
     <div class="card">
-      <div class="title">Walkathon Tracker <span class="location-badge">📍 Мурино, СПб</span></div>
+      <div class="title">Walkathon Tracker <span class="location-badge">📍 Live GPS</span></div>
       <div class="big" id="done">0m</div>
       <div class="muted" id="left">LEFT: 0m</div>
 
@@ -299,7 +298,6 @@
           <div class="n">N</div><div class="e">E</div><div class="s">S</div><div class="w">W</div>
         </div>
         <div class="mapWrap">
-          <!-- Google Maps iframe - обновляется из Firebase -->
           <iframe class="mapFrame" id="mapFrame" 
                   src="about:blank" 
                   loading="lazy"
@@ -690,17 +688,14 @@
       lastMapKey = "";
     }
 
-    // 🗺️ Google Maps Embed - БЕЗ API КЛЮЧА!
     function setMap(lat, lon){
       const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
       if (key === lastMapKey) return;
       lastMapKey = key;
 
-      // Google Maps Embed API - работает БЕЗ ключа для простого просмотра
       const zoom = 17;
-      const maptype = "roadmap"; // roadmap, satellite
+      const maptype = "roadmap";
       
-      // Используем Google Maps в режиме "place" (не требует API ключа)
       const src = `https://maps.google.com/maps?q=${lat},${lon}&t=${maptype}&z=${zoom}&output=embed`;
       
       mapFrame.src = src;
@@ -714,7 +709,7 @@
       if (!navigator.geolocation) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
-      console.log("🚀 GPS started (Google Maps Embed)");
+      console.log("🚀 GPS started");
       statusEl.textContent = "starting";
       lastValidPoint = null;
       lastSaveTime = 0;
@@ -731,6 +726,14 @@
           const { latitude, longitude, accuracy, speed } = position.coords;
           const timestamp = position.timestamp;
           const now = Date.now();
+
+          // 🔥 ОТПРАВЛЯЕМ КООРДИНАТЫ СРАЗУ (даже без движения)
+          await pushState("tracking", { 
+            accuracy, 
+            latitude, 
+            longitude, 
+            speed: speed ?? 0 
+          });
 
           setMap(latitude, longitude);
 
@@ -889,7 +892,6 @@
       } catch {}
     }
 
-    // 🔥 ГЛАВНОЕ: Слушаем Firebase и обновляем карту у ВСЕХ зрителей!
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
@@ -897,7 +899,6 @@
 
       updateUI({ status: s.status || "idle", acc: s.accuracy ?? null, speed: s.speed ?? 0 });
 
-      // Обновляем карту из Firebase координат
       if (typeof s.latitude === "number" && typeof s.longitude === "number") {
         setMap(s.latitude, s.longitude);
       }
@@ -906,7 +907,7 @@
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
-    console.log("🗺️ Google Maps Embed | Free & Live from Firebase");
+    console.log("🗺️ Tracker v2.0 | Instant GPS sync");
   </script>
 </body>
 </html>
