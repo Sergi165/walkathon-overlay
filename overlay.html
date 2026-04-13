@@ -1,183 +1,451 @@
- <!doctype html>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Walkathon Overlay</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      color: #fff;
+    }
 
-<html lang="ru"> <head> <meta charset="utf-8" /> <meta name="viewport" content="width=device-width,initial-scale=1" /> <title>Walkathon Overlay</title> <style> html, body{ margin:0; width:100%; height:100%; background:transparent; overflow:hidden; font-family: Arial, sans-serif; color:#fff; }
-text
+    .imgLayer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
 
-.imgLayer{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
-#imgBack{ z-index:1; }
-#hudWrap{ z-index:10; position:absolute; inset:0; }
-#imgFront{ z-index:20; }
+    #imgBack {
+      z-index: 1;
+    }
 
-.ovItem{
-  position:absolute; left:0; top:0;
-  transform-origin:center center;
-  will-change: transform, opacity;
-  pointer-events:none;
-  border:0;
-}
+    #hudWrap {
+      z-index: 10;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
 
-/* ===== Cards like screenshot ===== */
-.card{
-  position:absolute;
-  left: 24px;
-  border-radius: 14px;
-  background: rgba(20,22,28,.72);
-  box-shadow: 0 10px 34px rgba(0,0,0,.35);
-  backdrop-filter: blur(6px);
-  overflow: hidden;
-}
+    #imgFront {
+      z-index: 20;
+    }
 
-.cardTop{
-  bottom: 300px; /* чтобы не наезжало */
-  width: 420px;
-  padding: 16px 18px;
-  border-left: 4px solid #7c3aed;
-  /* display: none;  УБРАНО СКРЫТИЕ */
-}
+    .ovItem {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: center center;
+      will-change: transform, opacity;
+      pointer-events: none;
+      border: 0;
+    }
 
-.loc{
-  font-size: 12px;
-  letter-spacing: .22em;
-  font-weight: 900;
-  color: rgba(255,255,255,.72);
-  text-transform: uppercase;
-  margin-bottom: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+    /* ===== Cards ===== */
+    .card {
+      position: absolute;
+      left: 24px;
+      border-radius: 14px;
+      background: rgba(20, 22, 28, 0.72);
+      box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(6px);
+      overflow: hidden;
+    }
 
-.timeRow{
-  display:flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.time{
-  font-size: 54px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  line-height: 1;
-}
-.ampm{
-  font-size: 18px;
-  font-weight: 900;
-  color: #a78bfa;
-  text-transform: lowercase;
-}
+    .cardTop {
+      bottom: 300px;
+      width: 420px;
+      padding: 16px 18px;
+      border-left: 4px solid #7c3aed;
+    }
 
-.metaRow{
-  display:flex;
-  align-items:center;
-  gap: 10px;
-  color: rgba(255,255,255,.78);
-  font-weight: 900;
-}
-.temp{ font-size: 22px; }
-.date{
-  font-size: 14px;
-  font-weight: 800;
-  color: rgba(255,255,255,.65);
-}
+    .loc {
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.72);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
-.cardBottom{
-  bottom: 24px;
-  width: 520px;
-  padding: 16px 18px;
-  /* display: none; УБРАНО СКРЫТИЕ */
-}
+    .timeRow {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
 
-.leftBig{
-  font-size: 46px;
-  font-weight: 900;
-  color: #39ff14;
-  letter-spacing: .5px;
-  text-shadow: 0 0 10px rgba(57,255,20,.18);
-  margin-bottom: 12px;
-}
+    .time {
+      font-size: 54px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: 1;
+    }
 
-.rowTop{
-  display:flex;
-  justify-content:space-between;
-  align-items:baseline;
-  gap: 10px;
-  margin-bottom: 6px;
-}
+    .ampm {
+      font-size: 18px;
+      font-weight: 900;
+      color: #a78bfa;
+      text-transform: lowercase;
+    }
 
-.label{
-  font-size: 12px;
-  letter-spacing: .10em;
-  text-transform: uppercase;
-  font-weight: 900;
-  color: rgba(255,255,255,.62);
-}
-.smallVal{
-  font-size: 12px;
-  font-weight: 900;
-  color: rgba(255,255,255,.62);
-}
+    .metaRow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: rgba(255, 255, 255, 0.78);
+      font-weight: 900;
+    }
 
-.bar{
-  height: 16px;
-  background: rgba(255,255,255,.12);
-  border-radius: 999px;
-  overflow:hidden;
-  margin-bottom: 12px;
-}
-.fillGreen{
-  height:100%;
-  width:0%;
-  background: linear-gradient(90deg,#39ff14,#00d26a);
-  transition: width .25s ease;
-}
-.fillPurple{
-  height:100%;
-  width:0%;
-  background: linear-gradient(90deg,#7c3aed,#b68cff);
-  transition: width .25s ease;
-}
+    .temp {
+      font-size: 22px;
+    }
 
-.bottomLine{
-  display:flex;
-  justify-content:space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: rgba(255,255,255,.65);
-  font-weight: 900;
-  letter-spacing: .02em;
-  margin-top: 2px;
-}
-.bottomLine b{ color:#fff; }
+    .date {
+      font-size: 14px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.65);
+    }
 
-.status{
-  margin-top: 8px;
-  font-size: 12px;
-  color: rgba(255,255,255,.55);
-  font-weight: 800;
-}
-</style></head> <body> <div class="imgLayer" id="imgBack"></div> <div id="hudWrap"> <div class="card cardTop"> <div class="loc" id="city">WAITING FOR GPS...</div> <div class="timeRow"> <div class="time" id="clock">00:00:00</div> <div class="ampm" id="ampm">am</div> </div> <div class="metaRow"> <div class="temp" id="temp">--°C</div> <div class="date" id="date">---</div> </div> </div>
-text
+    .cardBottom {
+      bottom: 24px;
+      width: 520px;
+      padding: 16px 18px;
+    }
 
-<div class="card cardBottom">
-  <div class="leftBig" id="leftBig">LEFT: 0m</div>
+    .leftBig {
+      font-size: 46px;
+      font-weight: 900;
+      color: #39ff14;
+      letter-spacing: 0.5px;
+      text-shadow: 0 0 10px rgba(57, 255, 20, 0.18);
+      margin-bottom: 12px;
+    }
 
-  <div class="rowTop">
-    <div class="label">CURRENT LAP</div>
-    <div class="smallVal" id="lapText">0/50m</div>
+    .rowTop {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .label {
+      font-size: 12px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    .smallVal {
+      font-size: 12px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    .bar {
+      height: 16px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .fillGreen {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #39ff14, #00d26a);
+      transition: width 0.25s ease;
+    }
+
+    .fillPurple {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #7c3aed, #b68cff);
+      transition: width 0.25s ease;
+    }
+
+    .bottomLine {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.65);
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      margin-top: 2px;
+    }
+
+    .bottomLine b {
+      color: #fff;
+    }
+
+    .status {
+      margin-top: 8px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.55);
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <div class="imgLayer" id="imgBack"></div>
+  
+  <div id="hudWrap">
+    <div class="card cardTop">
+      <div class="loc" id="city">WAITING FOR GPS...</div>
+      <div class="timeRow">
+        <div class="time" id="clock">00:00:00</div>
+        <div class="ampm" id="ampm">am</div>
+      </div>
+      <div class="metaRow">
+        <div class="temp" id="temp">--°C</div>
+        <div class="date" id="date">---</div>
+      </div>
+    </div>
+
+    <div class="card cardBottom">
+      <div class="leftBig" id="leftBig">LEFT: 0m</div>
+
+      <div class="rowTop">
+        <div class="label">CURRENT LAP</div>
+        <div class="smallVal" id="lapText">0/50m</div>
+      </div>
+      <div class="bar"><div class="fillGreen" id="lapFill"></div></div>
+
+      <div class="rowTop">
+        <div class="label">TOTAL SUBATHON GOAL</div>
+        <div class="smallVal" id="totalPct">0%</div>
+      </div>
+      <div class="bar"><div class="fillPurple" id="totalFill"></div></div>
+
+      <div class="bottomLine">
+        <div>WALKED: <b id="walked">0m</b></div>
+        <div>FOLLOWS: <b id="follows">0</b></div>
+      </div>
+
+      <div class="status" id="status">GPS: idle</div>
+    </div>
   </div>
-  <div class="bar"><div class="fillGreen" id="lapFill"></div></div>
+  
+  <div class="imgLayer" id="imgFront"></div>
 
-  <div class="rowTop">
-    <div class="label">TOTAL SUBATHON GOAL</div>
-    <div class="smallVal" id="totalPct">0%</div>
-  </div>
-  <div class="bar"><div class="fillPurple" id="totalFill"></div></div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-  <div class="bottomLine">
-    <div>WALKED: <b id="walked">0m</b></div>
-    <div>FOLLOWS: <b id="follows">0</b></div>
-  </div>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo",
+      authDomain: "walkathon-a4233.firebaseapp.com",
+      databaseURL: "https://walkathon-a4233-default-rtdb.europe-west1.firebasedatabase.app/",
+      projectId: "walkathon-a4233",
+      storageBucket: "walkathon-a4233.firebasestorage.app",
+      messagingSenderId: "314823180241",
+      appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
+    };
 
-  <div class="status" id="status">GPS: idle</div>
-</div>
-</div> <div class="imgLayer" id="imgFront"></div> <script type="module"> import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"; import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"; const firebaseConfig = { apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo", authDomain: "walkathon-a4233.firebaseapp.com", databaseURL: "https://walkathon-a4233-default-rtdb.europe-west1.firebasedatabase.app/", projectId: "walkathon-a4233", storageBucket: "walkathon-a4233.firebasestorage.app", messagingSenderId: "314823180241", appId: "1:314823180241:web:bbfe6e689c18ec5d922af0" }; const app = initializeApp(firebaseConfig); const db = getDatabase(app); const cityEl = document.getElementById('city'); const tempEl = document.getElementById('temp'); const clockEl = document.getElementById('clock'); const ampmEl = document.getElementById('ampm'); const dateEl = document.getElementById('date'); const leftBigEl = document.getElementById('leftBig'); const lapTextEl = document.getElementById('lapText'); const lapFillEl = document.getElementById('lapFill'); const totalPctEl = document.getElementById('totalPct'); const totalFillEl = document.getElementById('totalFill'); const walkedEl = document.getElementById('walked'); const followsEl = document.getElementById('follows'); const statusEl = document.getElementById('status'); function updateClock() { const now = new Date(); let h = now.getHours(); const ampm = h >= 12 ? "pm" : "am"; let hh = h % 12; if (hh === 0) hh = 12; const mm = String(now.getMinutes()).padStart(2,'0'); const ss = String(now.getSeconds()).padStart(2,'0'); clockEl.textContent = `${String(hh).padStart(2,'0')}:${mm}:${ss}`; ampmEl.textContent = ampm; const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; dateEl.textContent = `${weekdays[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`; } updateClock(); setInterval(updateClock, 1000); let lastWeatherKey = ''; let lastWeatherFetchAt = 0; async function updateWeatherAndCity(lat, lon) { try { const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`; const now = Date.now(); if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) return; lastWeatherKey = roundedKey; lastWeatherFetchAt = now; const weatherRes = await fetch( `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m` ); const weatherData = await weatherRes.json(); if (weatherData?.current && typeof weatherData.current.temperature_2m !== 'undefined') { tempEl.textContent = Math.round(weatherData.current.temperature_2m) + '°C'; } const geoRes = await fetch( `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`, { headers: { "Accept": "application/json" } } ); const geoData = await geoRes.json(); if (geoData?.address) { const city = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.hamlet || geoData.address.county || 'UNKNOWN'; const country = geoData.address.country_code ? geoData.address.country_code.toUpperCase() : ''; cityEl.textContent = `${city} · ${country}`; } else { cityEl.textContent = 'LOCATION UNKNOWN'; } } catch (e) { cityEl.textContent = 'LOCATION UNAVAILABLE'; } } const stateRef = ref(db, 'walkathon/state'); onValue(stateRef, (snap) => { const s = snap.val() || {}; const distance = Number(s.distanceMeters || 0); const goal = Number(s.goalMeters || 25000); const left = Math.max(goal - distance, 0); const pct = goal > 0 ? Math.min((distance / goal) * 100, 100) : 0; const lapGoal = Number(s.lapGoalMeters || 50); const lap = lapGoal > 0 ? (distance % lapGoal) : 0; const lapPct = lapGoal > 0 ? Math.min((lap / lapGoal) * 100, 100) : 0; // "реальные" фолловеры если задан followsTotal, иначе просто счётчик виджета const follows = (s.followsTotal != null) ? Number(s.followsTotal || 0) : Number(s.followsCount ?? 0); leftBigEl.textContent = `LEFT: ${Math.round(left)}m`; lapTextEl.textContent = `${Math.round(lap)}/${Math.round(lapGoal)}m`; lapFillEl.style.width = lapPct + "%"; totalPctEl.textContent = `${pct.toFixed(0)}%`; totalFillEl.style.width = pct + "%"; walkedEl.textContent = `${Math.round(distance)}m`; followsEl.textContent = String(Math.round(follows)); statusEl.textContent = 'GPS: ' + (s.status || 'idle'); if (typeof s.latitude === 'number' && typeof s.longitude === 'number') { updateWeatherAndCity(s.latitude, s.longitude); } else { cityEl.textContent = 'WAITING FOR GPS...'; } }); // ===== Friend items (images + youtube) ===== const overlayId = new URLSearchParams(location.search).get("id") || "default"; const imgBack = document.getElementById("imgBack"); const imgFront = document.getElementById("imgFront"); const itemsRef = ref(db, `walkathon/overlays/${overlayId}/items`); const itemEls = new Map(); function layerParent(layer) { return (layer === "back") ? imgBack : imgFront; } function buildYouTubeSrc(ytId){ const id = encodeURIComponent(ytId || ""); return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${id}`; } function makeElForItem(it){ if (it.type === "yt") { const f = document.createElement("iframe"); f.className = "ovItem"; f.allow = "autoplay; encrypted-media"; f.frameBorder = "0"; return f; } const img = document.createElement("img"); img.className = "ovItem"; return img; } function upsertItem(id, it) { let el = itemEls.get(id); const wantType = it.type === "yt" ? "yt" : "img"; const layer = it.layer === "back" ? "back" : "front"; const parent = layerParent(layer); if (!el || el.dataset.type !== wantType) { if (el) el.remove(); el = makeElForItem({ type: wantType }); el.dataset.type = wantType; itemEls.set(id, el); parent.appendChild(el); } else if (el.parentElement !== parent) { parent.appendChild(el); } const x = Number(it.x ?? 0); const y = Number(it.y ?? 0); const sc = Number(it.scale ?? 1); const rot = Number(it.rotate ?? 0); const op = Number(it.opacity ?? 1); const hidden = it.hidden === true; el.style.display = hidden ? "none" : "block"; el.style.opacity = String(op); el.style.transform = `translate(${x}px, ${y}px) scale(${sc}) rotate(${rot}deg)`; // size for video if (it.w && it.h) { el.style.width = Number(it.w) + "px"; el.style.height = Number(it.h) + "px"; } else { el.style.width = ""; el.style.height = ""; } if (wantType === "yt") { const src = buildYouTubeSrc(it.ytId || ""); if (el.src !== src) el.src = src; } else { el.src = it.url || ""; } } function pruneItems(alive) { for (const [id, el] of itemEls.entries()) { if (!alive.has(id)) { el.remove(); itemEls.delete(id); } } } onValue(itemsRef, (snap) => { const items = snap.val() || {}; const alive = new Set(Object.keys(items)); for (const id of Object.keys(items)) upsertItem(id, items[id]); pruneItems(alive); }); </script></body> </html> 
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const cityEl = document.getElementById('city');
+    const tempEl = document.getElementById('temp');
+    const clockEl = document.getElementById('clock');
+    const ampmEl = document.getElementById('ampm');
+    const dateEl = document.getElementById('date');
+    const leftBigEl = document.getElementById('leftBig');
+    const lapTextEl = document.getElementById('lapText');
+    const lapFillEl = document.getElementById('lapFill');
+    const totalPctEl = document.getElementById('totalPct');
+    const totalFillEl = document.getElementById('totalFill');
+    const walkedEl = document.getElementById('walked');
+    const followsEl = document.getElementById('follows');
+    const statusEl = document.getElementById('status');
+
+    function updateClock() {
+      const now = new Date();
+      let h = now.getHours();
+      const ampm = h >= 12 ? "pm" : "am";
+      let hh = h % 12;
+      if (hh === 0) hh = 12;
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+      clockEl.textContent = `${String(hh).padStart(2, '0')}:${mm}:${ss}`;
+      ampmEl.textContent = ampm;
+
+      const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      dateEl.textContent = `${weekdays[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`;
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    let lastWeatherKey = '';
+    let lastWeatherFetchAt = 0;
+
+    async function updateWeatherAndCity(lat, lon) {
+      try {
+        const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+        const now = Date.now();
+        if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) return;
+
+        lastWeatherKey = roundedKey;
+        lastWeatherFetchAt = now;
+
+        const weatherRes = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m`
+        );
+        const weatherData = await weatherRes.json();
+        if (weatherData?.current && typeof weatherData.current.temperature_2m !== 'undefined') {
+          tempEl.textContent = Math.round(weatherData.current.temperature_2m) + '°C';
+        }
+
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`,
+          { headers: { "Accept": "application/json" } }
+        );
+        const geoData = await geoRes.json();
+        if (geoData?.address) {
+          const city = geoData.address.city || geoData.address.town || geoData.address.village ||
+                      geoData.address.hamlet || geoData.address.county || 'UNKNOWN';
+          const country = geoData.address.country_code ? geoData.address.country_code.toUpperCase() : '';
+          cityEl.textContent = `${city} · ${country}`;
+        } else {
+          cityEl.textContent = 'LOCATION UNKNOWN';
+        }
+      } catch (e) {
+        console.error('Weather/location error:', e);
+        cityEl.textContent = 'LOCATION UNAVAILABLE';
+      }
+    }
+
+    const stateRef = ref(db, 'walkathon/state');
+    onValue(stateRef, (snap) => {
+      const s = snap.val() || {};
+      const distance = Number(s.distanceMeters || 0);
+      const goal = Number(s.goalMeters || 25000);
+      const left = Math.max(goal - distance, 0);
+      const pct = goal > 0 ? Math.min((distance / goal) * 100, 100) : 0;
+
+      const lapGoal = Number(s.lapGoalMeters || 50);
+      const lap = lapGoal > 0 ? (distance % lapGoal) : 0;
+      const lapPct = lapGoal > 0 ? Math.min((lap / lapGoal) * 100, 100) : 0;
+
+      const follows = (s.followsTotal != null) ? Number(s.followsTotal || 0) : Number(s.followsCount ?? 0);
+
+      leftBigEl.textContent = `LEFT: ${Math.round(left)}m`;
+      lapTextEl.textContent = `${Math.round(lap)}/${Math.round(lapGoal)}m`;
+      lapFillEl.style.width = lapPct + "%";
+      totalPctEl.textContent = `${pct.toFixed(0)}%`;
+      totalFillEl.style.width = pct + "%";
+      walkedEl.textContent = `${Math.round(distance)}m`;
+      followsEl.textContent = String(Math.round(follows));
+      statusEl.textContent = 'GPS: ' + (s.status || 'idle');
+
+      if (typeof s.latitude === 'number' && typeof s.longitude === 'number') {
+        updateWeatherAndCity(s.latitude, s.longitude);
+      } else {
+        cityEl.textContent = 'WAITING FOR GPS...';
+      }
+    });
+
+    // ===== Friend items (images + youtube) =====
+    const overlayId = new URLSearchParams(location.search).get("id") || "default";
+    const imgBack = document.getElementById("imgBack");
+    const imgFront = document.getElementById("imgFront");
+    const itemsRef = ref(db, `walkathon/overlays/${overlayId}/items`);
+    const itemEls = new Map();
+
+    function layerParent(layer) {
+      return (layer === "back") ? imgBack : imgFront;
+    }
+
+    function buildYouTubeSrc(ytId) {
+      const id = encodeURIComponent(ytId || "");
+      return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${id}`;
+    }
+
+    function makeElForItem(it) {
+      if (it.type === "yt") {
+        const f = document.createElement("iframe");
+        f.className = "ovItem";
+        f.allow = "autoplay; encrypted-media";
+        f.frameBorder = "0";
+        return f;
+      }
+      const img = document.createElement("img");
+      img.className = "ovItem";
+      return img;
+    }
+
+    function upsertItem(id, it) {
+      let el = itemEls.get(id);
+      const wantType = it.type === "yt" ? "yt" : "img";
+      const layer = it.layer === "back" ? "back" : "front";
+      const parent = layerParent(layer);
+
+      if (!el || el.dataset.type !== wantType) {
+        if (el) el.remove();
+        el = makeElForItem({ type: wantType });
+        el.dataset.type = wantType;
+        itemEls.set(id, el);
+        parent.appendChild(el);
+      } else if (el.parentElement !== parent) {
+        parent.appendChild(el);
+      }
+
+      const x = Number(it.x ?? 0);
+      const y = Number(it.y ?? 0);
+      const sc = Number(it.scale ?? 1);
+      const rot = Number(it.rotate ?? 0);
+      const op = Number(it.opacity ?? 1);
+      const hidden = it.hidden === true;
+
+      el.style.display = hidden ? "none" : "block";
+      el.style.opacity = String(op);
+      el.style.transform = `translate(${x}px, ${y}px) scale(${sc}) rotate(${rot}deg)`;
+
+      if (it.w && it.h) {
+        el.style.width = Number(it.w) + "px";
+        el.style.height = Number(it.h) + "px";
+      } else {
+        el.style.width = "";
+        el.style.height = "";
+      }
+
+      if (wantType === "yt") {
+        const src = buildYouTubeSrc(it.ytId || "");
+        if (el.src !== src) el.src = src;
+      } else {
+        el.src = it.url || "";
+      }
+    }
+
+    function pruneItems(alive) {
+      for (const [id, el] of itemEls.entries()) {
+        if (!alive.has(id)) {
+          el.remove();
+          itemEls.delete(id);
+        }
+      }
+    }
+
+    onValue(itemsRef, (snap) => {
+      const items = snap.val() || {};
+      const alive = new Set(Object.keys(items));
+      for (const id of Object.keys(items)) upsertItem(id, items[id]);
+      pruneItems(alive);
+    });
+  </script>
+</body>
+</html>
