@@ -26,6 +26,8 @@
       will-change: transform, opacity;
       pointer-events:none;
       border:0;
+      object-fit: cover;
+      overflow: hidden;
     }
 
     /* ===== Cards like screenshot ===== */
@@ -40,11 +42,10 @@
     }
 
     .cardTop{
-      bottom: 300px; /* чтобы не наезжало */
+      bottom: 300px;
       width: 420px;
       padding: 16px 18px;
       border-left: 4px solid #7c3aed;
-      /* display: none;  УБРАНО СКРЫТИЕ */
     }
 
     .loc{
@@ -96,7 +97,6 @@
       bottom: 24px;
       width: 520px;
       padding: 16px 18px;
-      /* display: none; УБРАНО СКРЫТИЕ */
     }
 
     .leftBig{
@@ -317,7 +317,6 @@
       const lap = lapGoal > 0 ? (distance % lapGoal) : 0;
       const lapPct = lapGoal > 0 ? Math.min((lap / lapGoal) * 100, 100) : 0;
 
-      // "реальные" фолловеры если задан followsTotal, иначе просто счётчик виджета
       const follows =
         (s.followsTotal != null)
           ? Number(s.followsTotal || 0)
@@ -342,7 +341,6 @@
       }
     });
 
-    // ===== Friend items (images + youtube) =====
     const overlayId = new URLSearchParams(location.search).get("id") || "default";
     const imgBack = document.getElementById("imgBack");
     const imgFront = document.getElementById("imgFront");
@@ -397,7 +395,6 @@
       el.style.opacity = String(op);
       el.style.transform = `translate(${x}px, ${y}px) scale(${sc}) rotate(${rot}deg)`;
 
-      // size for video
       if (it.w && it.h) {
         el.style.width = Number(it.w) + "px";
         el.style.height = Number(it.h) + "px";
