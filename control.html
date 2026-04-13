@@ -60,7 +60,7 @@
     }
     
     #twitchPreviewFrame {
-      display: none; /* Скрыто по умолчанию */
+      display: none;
     }
 
     #stage{
@@ -81,6 +81,7 @@
       -webkit-user-drag:none;
       user-drag:none;
       will-change: transform, opacity;
+      overflow: hidden;
     }
     .item:active{ cursor: grabbing; }
     .item, .item * { -webkit-user-drag:none; user-drag:none; }
@@ -100,6 +101,18 @@
       color:rgba(255,255,255,.65);
       z-index:2;
       pointer-events:none;
+    }
+    .ytBox iframe {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border: none;
+    }
+
+    .item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
   </style>
 </head>
@@ -231,14 +244,13 @@
     stage.addEventListener("dragstart",(e)=>e.preventDefault());
     viewport.addEventListener("dragstart",(e)=>e.preventDefault());
 
-    // --- Twitch Preview Logic ---
     twitchPreviewToggle.addEventListener("change", () => {
         if (twitchPreviewToggle.checked) {
             const parentDomain = location.hostname || "localhost";
             twitchPreviewFrame.src = `https://player.twitch.tv/?channel=${TWITCH_CHANNEL}&parent=${parentDomain}&muted=true&autoplay=true`;
             twitchPreviewFrame.style.display = "block";
         } else {
-            twitchPreviewFrame.src = ""; // Stop loading to save resources
+            twitchPreviewFrame.src = "";
             twitchPreviewFrame.style.display = "none";
         }
     });
@@ -269,7 +281,6 @@
     applyScale();
     addEventListener("resize", applyScale);
 
-    // auth
     $("loginBtn").onclick = async ()=> signInWithEmailAndPassword(auth, $("email").value.trim(), $("pass").value);
     $("logoutBtn").onclick = async ()=> signOut(auth);
     onAuthStateChanged(auth,(u)=>{
@@ -278,7 +289,6 @@
       $("loginBtn").disabled = !!u;
     });
 
-    // state
     let selectedId = null;
     let itemsCache = {};
     const els = new Map();
@@ -389,8 +399,6 @@
         const f = document.createElement("iframe");
         f.allow = "autoplay; encrypted-media";
         f.frameBorder = "0";
-        f.style.width = "100%";
-        f.style.height = "100%";
         f.style.pointerEvents = "none";
         box.appendChild(f);
 
@@ -485,7 +493,6 @@
       if (selectedId && !alive.has(selectedId)) select(null);
     }
 
-    // arrow nudge
     window.addEventListener("keydown", async (e) => {
       if (!selectedId) return;
       const step = e.shiftKey ? 10 : 1;
