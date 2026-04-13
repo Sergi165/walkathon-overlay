@@ -85,12 +85,13 @@
       position: relative;
     }
     
-    /* Статическая картинка карты вместо iframe */
-    .mapImage {
+    /* Google Maps iframe - БЕЗ API ключа! */
+    .mapFrame {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      border: 0;
       display: block;
+      filter: invert(90%) hue-rotate(180deg); /* Тёмная тема */
     }
 
     .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
@@ -291,17 +292,22 @@
     </div>
 
     <div class="card compass-card">
-      <div class="title">Compass + Map (OpenStreetMap)</div>
+      <div class="title">Compass + Map (Google Maps — Live from Firebase)</div>
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
           <div class="n">N</div><div class="e">E</div><div class="s">S</div><div class="w">W</div>
         </div>
         <div class="mapWrap">
-          <img class="mapImage" id="mapImage" src="" alt="Map" />
+          <!-- Google Maps iframe - обновляется из Firebase -->
+          <iframe class="mapFrame" id="mapFrame" 
+                  src="about:blank" 
+                  loading="lazy"
+                  referrerpolicy="no-referrer-when-downgrade">
+          </iframe>
         </div>
       </div>
-      <div class="muted mapInfo" style="margin-top:8px" id="mapInfo">Map: idle</div>
+      <div class="muted mapInfo" style="margin-top:8px" id="mapInfo">Map: waiting for GPS...</div>
     </div>
 
     <div class="card chat-card" id="chatCard">
@@ -360,7 +366,7 @@
     const stopBtn  = document.getElementById("stopBtn");
     const resetBtn = document.getElementById("resetBtn");
 
-    const mapImage = document.getElementById("mapImage");
+    const mapFrame = document.getElementById("mapFrame");
     const mapInfo  = document.getElementById("mapInfo");
 
     const chatCard = document.getElementById("chatCard");
@@ -679,33 +685,28 @@
     let lastMapKey = "";
 
     function setMapBlank(){
-      mapImage.src = "";
+      mapFrame.src = "about:blank";
       mapInfo.textContent = "Map: idle";
       lastMapKey = "";
     }
 
-    // OpenStreetMap Static API - БЫСТРО и ЛЕГКО!
+    // 🗺️ Google Maps Embed - БЕЗ API КЛЮЧА!
     function setMap(lat, lon){
       const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
       if (key === lastMapKey) return;
       lastMapKey = key;
 
-      const zoom = 16;
-      const width = 400;
-      const height = 200;
+      // Google Maps Embed API - работает БЕЗ ключа для простого просмотра
+      const zoom = 17;
+      const maptype = "roadmap"; // roadmap, satellite
       
-      // Используем StaticMap API от OpenStreetMap
-      const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.005}%2C${lat-0.003}%2C${lon+0.005}%2C${lat+0.003}&layer=mapnik&marker=${lat}%2C${lon}`;
+      // Используем Google Maps в режиме "place" (не требует API ключа)
+      const src = `https://maps.google.com/maps?q=${lat},${lon}&t=${maptype}&z=${zoom}&output=embed`;
       
-      // Или альтернатива - MapQuest StaticMap (быстрее):
-      // const src = `https://open.mapquestapi.com/staticmap/v5/map?locations=${lat},${lon}&size=${width},${height}&zoom=${zoom}&key=YOUR_KEY`;
+      mapFrame.src = src;
+      mapInfo.textContent = `📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
       
-      // Простая картинка через tile сервер (самое быстрое):
-      const tile_x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
-      const tile_y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
-      
-      mapImage.src = `https://tile.openstreetmap.org/${zoom}/${tile_x}/${tile_y}.png`;
-      mapInfo.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      console.log(`🗺️ Map updated: ${lat}, ${lon}`);
     }
 
     async function startGPS() {
@@ -713,7 +714,7 @@
       if (!navigator.geolocation) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
-      console.log("🚀 GPS started (OpenStreetMap)");
+      console.log("🚀 GPS started (Google Maps Embed)");
       statusEl.textContent = "starting";
       lastValidPoint = null;
       lastSaveTime = 0;
@@ -888,6 +889,7 @@
       } catch {}
     }
 
+    // 🔥 ГЛАВНОЕ: Слушаем Firebase и обновляем карту у ВСЕХ зрителей!
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
@@ -895,6 +897,7 @@
 
       updateUI({ status: s.status || "idle", acc: s.accuracy ?? null, speed: s.speed ?? 0 });
 
+      // Обновляем карту из Firebase координат
       if (typeof s.latitude === "number" && typeof s.longitude === "number") {
         setMap(s.latitude, s.longitude);
       }
@@ -903,7 +906,7 @@
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
-    console.log("📍 OpenStreetMap | Fast & Light");
+    console.log("🗺️ Google Maps Embed | Free & Live from Firebase");
   </script>
 </body>
 </html>
