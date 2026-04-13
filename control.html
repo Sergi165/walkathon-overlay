@@ -113,6 +113,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      display: block;
     }
   </style>
 </head>
@@ -120,9 +121,10 @@
   <h2>Overlay Control</h2>
 
   <div class="card hint">
-    <b>Версия:</b> control-build-4 (twitch-preview)<br>
+    <b>Версия:</b> control-build-4 (twitch-preview + crop)<br>
     • Перетаскивайте элементы внутри поля 1920×1080.<br>
-    • Стрелки двигают выбранный: 1px, <kbd>Shift</kbd>+стрелки: 10px.
+    • Стрелки двигают выбранный: 1px, <kbd>Shift</kbd>+стрелки: 10px.<br>
+    • Видео и изображения обрезаются по размеру (object-fit: cover).
   </div>
 
   <div class="card">
@@ -404,10 +406,14 @@
 
         return box;
       }
+      const container = document.createElement("div");
+      container.className = "item";
+      container.draggable = false;
+      
       const img = document.createElement("img");
-      img.className = "item";
-      img.draggable = false;
-      return img;
+      container.appendChild(img);
+      
+      return container;
     }
 
     function renderStyle(el, it){
@@ -475,7 +481,8 @@
         const src = ytSrc(it.ytId || "");
         if (iframe && iframe.src !== src) iframe.src = src;
       } else {
-        el.src = it.url || "";
+        const img = el.querySelector("img");
+        if (img) img.src = it.url || "";
       }
 
       itemsCache[id] = it;
