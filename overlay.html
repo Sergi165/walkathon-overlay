@@ -1,396 +1,183 @@
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Walkathon Overlay</title>
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      background: transparent;
-      color: #fff;
-      font-family: 'Arial', sans-serif;
-      overflow: hidden;
-    }
+ <!doctype html>
 
-    .overlay {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      background: linear-gradient(135deg, rgba(23, 26, 33, 0.95), rgba(15, 17, 21, 0.98));
-      backdrop-filter: blur(12px);
-      border: 2px solid rgba(57, 255, 20, 0.3);
-      border-radius: 20px;
-      padding: 20px 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 40px rgba(57, 255, 20, 0.15);
-      min-width: 320px;
-      animation: slideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
+<html lang="ru"> <head> <meta charset="utf-8" /> <meta name="viewport" content="width=device-width,initial-scale=1" /> <title>Walkathon Overlay</title> <style> html, body{ margin:0; width:100%; height:100%; background:transparent; overflow:hidden; font-family: Arial, sans-serif; color:#fff; }
+text
 
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateX(-60px) scale(0.9);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0) scale(1);
-      }
-    }
+.imgLayer{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+#imgBack{ z-index:1; }
+#hudWrap{ z-index:10; position:absolute; inset:0; }
+#imgFront{ z-index:20; }
 
-    .title {
-      font-size: 14px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-      color: #a6adbb;
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+.ovItem{
+  position:absolute; left:0; top:0;
+  transform-origin:center center;
+  will-change: transform, opacity;
+  pointer-events:none;
+  border:0;
+}
 
-    .title::before {
-      content: "📍";
-      font-size: 16px;
-      animation: pulse 2s ease-in-out infinite;
-    }
+/* ===== Cards like screenshot ===== */
+.card{
+  position:absolute;
+  left: 24px;
+  border-radius: 14px;
+  background: rgba(20,22,28,.72);
+  box-shadow: 0 10px 34px rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.1); }
-    }
+.cardTop{
+  bottom: 300px; /* чтобы не наезжало */
+  width: 420px;
+  padding: 16px 18px;
+  border-left: 4px solid #7c3aed;
+  /* display: none;  УБРАНО СКРЫТИЕ */
+}
 
-    .distance {
-      font-size: 56px;
-      font-weight: 900;
-      background: linear-gradient(135deg, #39ff14, #00d26a);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      line-height: 1;
-      margin-bottom: 8px;
-      text-shadow: 0 0 30px rgba(57, 255, 20, 0.5);
-      animation: glow 3s ease-in-out infinite;
-    }
+.loc{
+  font-size: 12px;
+  letter-spacing: .22em;
+  font-weight: 900;
+  color: rgba(255,255,255,.72);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-    @keyframes glow {
-      0%, 100% { filter: brightness(1) drop-shadow(0 0 10px rgba(57, 255, 20, 0.4)); }
-      50% { filter: brightness(1.2) drop-shadow(0 0 20px rgba(57, 255, 20, 0.6)); }
-    }
+.timeRow{
+  display:flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.time{
+  font-size: 54px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+.ampm{
+  font-size: 18px;
+  font-weight: 900;
+  color: #a78bfa;
+  text-transform: lowercase;
+}
 
-    .goal {
-      font-size: 16px;
-      color: #a6adbb;
-      margin-bottom: 16px;
-      font-weight: 600;
-    }
+.metaRow{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  color: rgba(255,255,255,.78);
+  font-weight: 900;
+}
+.temp{ font-size: 22px; }
+.date{
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255,255,255,.65);
+}
 
-    .goal-value {
-      color: #39ff14;
-      font-weight: 700;
-    }
+.cardBottom{
+  bottom: 24px;
+  width: 520px;
+  padding: 16px 18px;
+  /* display: none; УБРАНО СКРЫТИЕ */
+}
 
-    .progress-bar {
-      width: 100%;
-      height: 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      overflow: hidden;
-      position: relative;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-      margin-bottom: 16px;
-    }
+.leftBig{
+  font-size: 46px;
+  font-weight: 900;
+  color: #39ff14;
+  letter-spacing: .5px;
+  text-shadow: 0 0 10px rgba(57,255,20,.18);
+  margin-bottom: 12px;
+}
 
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #39ff14, #00d26a, #39ff14);
-      background-size: 200% 100%;
-      border-radius: 20px;
-      width: 0%;
-      transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-      animation: shimmer 3s linear infinite;
-      box-shadow: 0 0 20px rgba(57, 255, 20, 0.6);
-    }
+.rowTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
 
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
+.label{
+  font-size: 12px;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  font-weight: 900;
+  color: rgba(255,255,255,.62);
+}
+.smallVal{
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255,255,255,.62);
+}
 
-    .stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 16px;
-    }
+.bar{
+  height: 16px;
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+  overflow:hidden;
+  margin-bottom: 12px;
+}
+.fillGreen{
+  height:100%;
+  width:0%;
+  background: linear-gradient(90deg,#39ff14,#00d26a);
+  transition: width .25s ease;
+}
+.fillPurple{
+  height:100%;
+  width:0%;
+  background: linear-gradient(90deg,#7c3aed,#b68cff);
+  transition: width .25s ease;
+}
 
-    .stat {
-      background: rgba(255, 255, 255, 0.05);
-      padding: 10px 14px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      transition: all 0.3s ease;
-    }
+.bottomLine{
+  display:flex;
+  justify-content:space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: rgba(255,255,255,.65);
+  font-weight: 900;
+  letter-spacing: .02em;
+  margin-top: 2px;
+}
+.bottomLine b{ color:#fff; }
 
-    .stat:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(57, 255, 20, 0.3);
-      transform: translateY(-2px);
-    }
+.status{
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,.55);
+  font-weight: 800;
+}
+</style></head> <body> <div class="imgLayer" id="imgBack"></div> <div id="hudWrap"> <div class="card cardTop"> <div class="loc" id="city">WAITING FOR GPS...</div> <div class="timeRow"> <div class="time" id="clock">00:00:00</div> <div class="ampm" id="ampm">am</div> </div> <div class="metaRow"> <div class="temp" id="temp">--°C</div> <div class="date" id="date">---</div> </div> </div>
+text
 
-    .stat-label {
-      font-size: 11px;
-      color: #a6adbb;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
-      font-weight: 600;
-    }
+<div class="card cardBottom">
+  <div class="leftBig" id="leftBig">LEFT: 0m</div>
 
-    .stat-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: #fff;
-    }
+  <div class="rowTop">
+    <div class="label">CURRENT LAP</div>
+    <div class="smallVal" id="lapText">0/50m</div>
+  </div>
+  <div class="bar"><div class="fillGreen" id="lapFill"></div></div>
 
-    .status-badge {
-      display: inline-block;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      animation: fadeIn 0.3s ease;
-    }
+  <div class="rowTop">
+    <div class="label">TOTAL SUBATHON GOAL</div>
+    <div class="smallVal" id="totalPct">0%</div>
+  </div>
+  <div class="bar"><div class="fillPurple" id="totalFill"></div></div>
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: scale(0.8); }
-      to { opacity: 1; transform: scale(1); }
-    }
-
-    .status-idle {
-      background: rgba(166, 173, 187, 0.2);
-      color: #a6adbb;
-    }
-
-    .status-tracking {
-      background: rgba(57, 255, 20, 0.2);
-      color: #39ff14;
-      animation: pulse-status 2s ease-in-out infinite;
-    }
-
-    .status-acquiring,
-    .status-calibrating,
-    .status-starting {
-      background: rgba(255, 193, 7, 0.2);
-      color: #ffc107;
-      animation: pulse-status 1s ease-in-out infinite;
-    }
-
-    .status-stopped {
-      background: rgba(217, 58, 73, 0.2);
-      color: #ff6b6b;
-    }
-
-    .status-error,
-    .status-weak {
-      background: rgba(217, 58, 73, 0.3);
-      color: #ff4444;
-      animation: shake 0.5s ease infinite;
-    }
-
-    @keyframes pulse-status {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-2px); }
-      75% { transform: translateX(2px); }
-    }
-
-    .location-info {
-      margin-top: 12px;
-      padding: 10px;
-      background: rgba(57, 255, 20, 0.05);
-      border-radius: 10px;
-      border: 1px solid rgba(57, 255, 20, 0.2);
-      font-size: 12px;
-      color: #a6adbb;
-    }
-
-    .coords {
-      font-family: 'Courier New', monospace;
-      color: #39ff14;
-      font-weight: 600;
-    }
-  </style>
-</head>
-<body>
-  <div class="overlay">
-    <div class="title">🚶 Walkathon Progress</div>
-    
-    <div class="distance" id="distance">0m</div>
-    <div class="goal">Goal: <span class="goal-value" id="goal">25,000m</span></div>
-    
-    <div class="progress-bar">
-      <div class="progress-fill" id="progress"></div>
-    </div>
-    
-    <div class="stats">
-      <div class="stat">
-        <div class="stat-label">Status</div>
-        <div class="stat-value">
-          <span class="status-badge status-idle" id="status">Idle</span>
-        </div>
-      </div>
-      
-      <div class="stat">
-        <div class="stat-label">Accuracy</div>
-        <div class="stat-value" id="accuracy">-</div>
-      </div>
-      
-      <div class="stat">
-        <div class="stat-label">Speed</div>
-        <div class="stat-value" id="speed">0 km/h</div>
-      </div>
-      
-      <div class="stat">
-        <div class="stat-label">Remaining</div>
-        <div class="stat-value" id="remaining">-</div>
-      </div>
-    </div>
-    
-    <div class="location-info" id="locationInfo" style="display: none;">
-      <div>📍 <span class="coords" id="coords">-</span></div>
-    </div>
+  <div class="bottomLine">
+    <div>WALKED: <b id="walked">0m</b></div>
+    <div>FOLLOWS: <b id="follows">0</b></div>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo",
-      authDomain: "walkathon-a4233.firebaseapp.com",
-      databaseURL: "https://walkathon-a4233-default-rtdb.europe-west1.firebasedatabase.app/",
-      projectId: "walkathon-a4233",
-      storageBucket: "walkathon-a4233.firebasestorage.app",
-      messagingSenderId: "314823180241",
-      appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const stateRef = ref(db, "walkathon/state");
-
-    const distanceEl = document.getElementById("distance");
-    const goalEl = document.getElementById("goal");
-    const progressEl = document.getElementById("progress");
-    const statusEl = document.getElementById("status");
-    const accuracyEl = document.getElementById("accuracy");
-    const speedEl = document.getElementById("speed");
-    const remainingEl = document.getElementById("remaining");
-    const locationInfoEl = document.getElementById("locationInfo");
-    const coordsEl = document.getElementById("coords");
-
-    const DEFAULT_GOAL = 25000;
-
-    function formatDistance(meters) {
-      if (meters >= 1000) {
-        return (meters / 1000).toFixed(2) + "km";
-      }
-      return Math.round(meters) + "m";
-    }
-
-    function formatNumber(num) {
-      return new Intl.NumberFormat('ru-RU').format(Math.round(num));
-    }
-
-    function getStatusClass(status) {
-      const statusLower = (status || "idle").toLowerCase();
-      
-      if (statusLower.includes("track")) return "status-tracking";
-      if (statusLower.includes("acquir") || statusLower.includes("calibrat") || statusLower.includes("start")) return "status-acquiring";
-      if (statusLower.includes("stop")) return "status-stopped";
-      if (statusLower.includes("error") || statusLower.includes("weak")) return "status-error";
-      
-      return "status-idle";
-    }
-
-    function getStatusText(status) {
-      const statusLower = (status || "idle").toLowerCase();
-      
-      if (statusLower.includes("track")) return "🟢 Tracking";
-      if (statusLower.includes("acquir")) return "🟡 Acquiring GPS";
-      if (statusLower.includes("calibrat")) return "🟡 Calibrating";
-      if (statusLower.includes("start")) return "🟡 Starting";
-      if (statusLower.includes("weak")) return "🔴 Weak Signal";
-      if (statusLower.includes("stop")) return "⏸️ Stopped";
-      if (statusLower.includes("error")) return "🔴 GPS Error";
-      if (statusLower.includes("reset")) return "🔄 Reset";
-      
-      return "⚪ Idle";
-    }
-
-    // 🔥 Слушаем изменения в Firebase
-    onValue(stateRef, (snapshot) => {
-      const data = snapshot.val();
-      
-      if (!data) {
-        console.log("⚠️ No data from Firebase");
-        return;
-      }
-
-      console.log("📡 Firebase update:", data);
-
-      // Дистанция
-      const distance = data.distanceMeters || 0;
-      const goal = data.goalMeters || DEFAULT_GOAL;
-      
-      distanceEl.textContent = formatDistance(distance);
-      goalEl.textContent = formatDistance(goal);
-
-      // Прогресс бар
-      const percent = goal > 0 ? Math.min((distance / goal) * 100, 100) : 0;
-      progressEl.style.width = percent + "%";
-
-      // 🔥 ГЛАВНОЕ: Статус обновляется ВСЕГДА, даже если distance = 0!
-      const status = data.status || "idle";
-      statusEl.textContent = getStatusText(status);
-      statusEl.className = "status-badge " + getStatusClass(status);
-
-      // Точность
-      if (data.accuracy != null) {
-        accuracyEl.textContent = Math.round(data.accuracy) + "m";
-      } else {
-        accuracyEl.textContent = "-";
-      }
-
-      // Скорость
-      if (data.speed != null) {
-        speedEl.textContent = (data.speed * 3.6).toFixed(1) + " km/h";
-      } else {
-        speedEl.textContent = "0 km/h";
-      }
-
-      // Остаток
-      const remaining = Math.max(goal - distance, 0);
-      remainingEl.textContent = formatDistance(remaining);
-
-      // Координаты
-      if (data.latitude != null && data.longitude != null) {
-        locationInfoEl.style.display = "block";
-        coordsEl.textContent = `${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)}`;
-      } else {
-        locationInfoEl.style.display = "none";
-      }
-    });
-
-    console.log("🎬 Overlay initialized - listening to Firebase");
-  </script>
-</body>
-</html>
+  <div class="status" id="status">GPS: idle</div>
+</div>
+</div> <div class="imgLayer" id="imgFront"></div> <script type="module"> import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"; import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"; const firebaseConfig = { apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo", authDomain: "walkathon-a4233.firebaseapp.com", databaseURL: "https://walkathon-a4233-default-rtdb.europe-west1.firebasedatabase.app/", projectId: "walkathon-a4233", storageBucket: "walkathon-a4233.firebasestorage.app", messagingSenderId: "314823180241", appId: "1:314823180241:web:bbfe6e689c18ec5d922af0" }; const app = initializeApp(firebaseConfig); const db = getDatabase(app); const cityEl = document.getElementById('city'); const tempEl = document.getElementById('temp'); const clockEl = document.getElementById('clock'); const ampmEl = document.getElementById('ampm'); const dateEl = document.getElementById('date'); const leftBigEl = document.getElementById('leftBig'); const lapTextEl = document.getElementById('lapText'); const lapFillEl = document.getElementById('lapFill'); const totalPctEl = document.getElementById('totalPct'); const totalFillEl = document.getElementById('totalFill'); const walkedEl = document.getElementById('walked'); const followsEl = document.getElementById('follows'); const statusEl = document.getElementById('status'); function updateClock() { const now = new Date(); let h = now.getHours(); const ampm = h >= 12 ? "pm" : "am"; let hh = h % 12; if (hh === 0) hh = 12; const mm = String(now.getMinutes()).padStart(2,'0'); const ss = String(now.getSeconds()).padStart(2,'0'); clockEl.textContent = `${String(hh).padStart(2,'0')}:${mm}:${ss}`; ampmEl.textContent = ampm; const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; dateEl.textContent = `${weekdays[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`; } updateClock(); setInterval(updateClock, 1000); let lastWeatherKey = ''; let lastWeatherFetchAt = 0; async function updateWeatherAndCity(lat, lon) { try { const roundedKey = `${lat.toFixed(3)},${lon.toFixed(3)}`; const now = Date.now(); if (roundedKey === lastWeatherKey && now - lastWeatherFetchAt < 60000) return; lastWeatherKey = roundedKey; lastWeatherFetchAt = now; const weatherRes = await fetch( `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m` ); const weatherData = await weatherRes.json(); if (weatherData?.current && typeof weatherData.current.temperature_2m !== 'undefined') { tempEl.textContent = Math.round(weatherData.current.temperature_2m) + '°C'; } const geoRes = await fetch( `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`, { headers: { "Accept": "application/json" } } ); const geoData = await geoRes.json(); if (geoData?.address) { const city = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.hamlet || geoData.address.county || 'UNKNOWN'; const country = geoData.address.country_code ? geoData.address.country_code.toUpperCase() : ''; cityEl.textContent = `${city} · ${country}`; } else { cityEl.textContent = 'LOCATION UNKNOWN'; } } catch (e) { cityEl.textContent = 'LOCATION UNAVAILABLE'; } } const stateRef = ref(db, 'walkathon/state'); onValue(stateRef, (snap) => { const s = snap.val() || {}; const distance = Number(s.distanceMeters || 0); const goal = Number(s.goalMeters || 25000); const left = Math.max(goal - distance, 0); const pct = goal > 0 ? Math.min((distance / goal) * 100, 100) : 0; const lapGoal = Number(s.lapGoalMeters || 50); const lap = lapGoal > 0 ? (distance % lapGoal) : 0; const lapPct = lapGoal > 0 ? Math.min((lap / lapGoal) * 100, 100) : 0; // "реальные" фолловеры если задан followsTotal, иначе просто счётчик виджета const follows = (s.followsTotal != null) ? Number(s.followsTotal || 0) : Number(s.followsCount ?? 0); leftBigEl.textContent = `LEFT: ${Math.round(left)}m`; lapTextEl.textContent = `${Math.round(lap)}/${Math.round(lapGoal)}m`; lapFillEl.style.width = lapPct + "%"; totalPctEl.textContent = `${pct.toFixed(0)}%`; totalFillEl.style.width = pct + "%"; walkedEl.textContent = `${Math.round(distance)}m`; followsEl.textContent = String(Math.round(follows)); statusEl.textContent = 'GPS: ' + (s.status || 'idle'); if (typeof s.latitude === 'number' && typeof s.longitude === 'number') { updateWeatherAndCity(s.latitude, s.longitude); } else { cityEl.textContent = 'WAITING FOR GPS...'; } }); // ===== Friend items (images + youtube) ===== const overlayId = new URLSearchParams(location.search).get("id") || "default"; const imgBack = document.getElementById("imgBack"); const imgFront = document.getElementById("imgFront"); const itemsRef = ref(db, `walkathon/overlays/${overlayId}/items`); const itemEls = new Map(); function layerParent(layer) { return (layer === "back") ? imgBack : imgFront; } function buildYouTubeSrc(ytId){ const id = encodeURIComponent(ytId || ""); return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${id}`; } function makeElForItem(it){ if (it.type === "yt") { const f = document.createElement("iframe"); f.className = "ovItem"; f.allow = "autoplay; encrypted-media"; f.frameBorder = "0"; return f; } const img = document.createElement("img"); img.className = "ovItem"; return img; } function upsertItem(id, it) { let el = itemEls.get(id); const wantType = it.type === "yt" ? "yt" : "img"; const layer = it.layer === "back" ? "back" : "front"; const parent = layerParent(layer); if (!el || el.dataset.type !== wantType) { if (el) el.remove(); el = makeElForItem({ type: wantType }); el.dataset.type = wantType; itemEls.set(id, el); parent.appendChild(el); } else if (el.parentElement !== parent) { parent.appendChild(el); } const x = Number(it.x ?? 0); const y = Number(it.y ?? 0); const sc = Number(it.scale ?? 1); const rot = Number(it.rotate ?? 0); const op = Number(it.opacity ?? 1); const hidden = it.hidden === true; el.style.display = hidden ? "none" : "block"; el.style.opacity = String(op); el.style.transform = `translate(${x}px, ${y}px) scale(${sc}) rotate(${rot}deg)`; // size for video if (it.w && it.h) { el.style.width = Number(it.w) + "px"; el.style.height = Number(it.h) + "px"; } else { el.style.width = ""; el.style.height = ""; } if (wantType === "yt") { const src = buildYouTubeSrc(it.ytId || ""); if (el.src !== src) el.src = src; } else { el.src = it.url || ""; } } function pruneItems(alive) { for (const [id, el] of itemEls.entries()) { if (!alive.has(id)) { el.remove(); itemEls.delete(id); } } } onValue(itemsRef, (snap) => { const items = snap.val() || {}; const alive = new Set(Object.keys(items)); for (const id of Object.keys(items)) upsertItem(id, items[id]); pruneItems(alive); }); </script></body> </html> 
