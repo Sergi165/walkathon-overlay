@@ -6,82 +6,202 @@
   <title>Walkathon Tracker</title>
 
   <script>
+    /**
+     * Константы для настройки чата и канала.
+     */
     const CHANNEL_NAME = "sergiei2";
     const MESSAGE_LIFETIME = 60;
     const MAX_MESSAGES = 3;
   </script>
 
   <style>
-    :root{
-      --bg:#0f1115;
-      --panel:#171a21;
-      --muted:#a6adbb;
-      --green:#39ff14;
-      --green2:#00d26a;
-      --line:#2a2f3a;
-      --white:#fff;
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --muted: #a6adbb;
+      --green: #39ff14;
+      --green2: #00d26a;
+      --line: #2a2f3a;
+      --white: #fff;
     }
-    * { box-sizing: border-box; }
-    html, body { margin:0; background:var(--bg); color:var(--white); font-family: Arial, sans-serif; }
 
-    .wrap { padding:12px; display:grid; gap:12px; }
-    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; }
-    .sticky-preview { position: sticky; top: 12px; z-index: 50; }
+    * { 
+      box-sizing: border-box; 
+    }
 
-    .title { font-size:13px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; }
-    .big { font-size:34px; font-weight:700; color:var(--green); line-height:1.1; }
-    .muted { color:var(--muted); font-size:13px; }
-    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    html, body { 
+      margin: 0; 
+      background: var(--bg); 
+      color: var(--white); 
+      font-family: Arial, sans-serif; 
+      overflow-x: hidden;
+    }
 
-    .meta { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .stat { background: rgba(255,255,255,.03); border:1px solid var(--line); border-radius:12px; padding:10px; }
-    .stat .k { color:var(--muted); font-size:12px; margin-bottom:4px; }
-    .stat .v { font-size:18px; font-weight:700; }
+    /* Основная обертка контента */
+    .wrap { 
+      padding: 12px; 
+      display: grid; 
+      gap: 12px; 
+    }
 
-    .bar { margin-top:10px; height:18px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; }
-    .fill { width:0%; height:100%; background:linear-gradient(90deg,var(--green),var(--green2)); transition: width .35s ease; }
+    /* Стиль карточек */
+    .card { 
+      background: var(--panel); 
+      border: 1px solid var(--line); 
+      border-radius: 14px; 
+      padding: 12px; 
+    }
 
-    button { border:0; border-radius:10px; padding:12px 14px; color:white; font-weight:700; background:#252a35; cursor:pointer; }
-    button.primary { background:#1f6feb; }
-    button.danger { background:#d73a49; }
-    button.ok { background:#238636; }
-    button:disabled { opacity:.55; cursor:not-allowed; }
+    /* Закрепленное превью стрима */
+    .sticky-preview { 
+      position: sticky; 
+      top: 12px; 
+      z-index: 50; 
+    }
 
-    .stream-preview { width:100%; aspect-ratio:16/9; border:0; border-radius:12px; background:#000; }
+    .title { 
+      font-size: 13px; 
+      color: var(--muted); 
+      margin-bottom: 8px; 
+      text-transform: uppercase; 
+      letter-spacing: .06em; 
+    }
 
-    .compass { display:flex; align-items:stretch; gap:12px; }
+    .big { 
+      font-size: 34px; 
+      font-weight: 700; 
+      color: var(--green); 
+      line-height: 1.1; 
+    }
+
+    .muted { 
+      color: var(--muted); 
+      font-size: 13px; 
+    }
+
+    .row { 
+      display: flex; 
+      gap: 8px; 
+      flex-wrap: wrap; 
+      align-items: center; 
+    }
+
+    .meta { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 8px; 
+    }
+
+    .stat { 
+      background: rgba(255, 255, 255, .03); 
+      border: 1px solid var(--line); 
+      border-radius: 12px; 
+      padding: 10px; 
+    }
+
+    .stat .k { 
+      color: var(--muted); 
+      font-size: 12px; 
+      margin-bottom: 4px; 
+    }
+
+    .stat .v { 
+      font-size: 18px; 
+      font-weight: 700; 
+    }
+
+    /* Прогресс-бар */
+    .bar { 
+      margin-top: 10px; 
+      height: 18px; 
+      background: rgba(255, 255, 255, .08); 
+      border-radius: 999px; 
+      overflow: hidden; 
+    }
+
+    .fill { 
+      width: 0%; 
+      height: 100%; 
+      background: linear-gradient(90deg, var(--green), var(--green2)); 
+      transition: width .35s ease; 
+    }
+
+    /* Кнопки управления */
+    button { 
+      border: 0; 
+      border-radius: 10px; 
+      padding: 12px 14px; 
+      color: white; 
+      font-weight: 700; 
+      background: #252a35; 
+      cursor: pointer; 
+      transition: background 0.2s;
+    }
+
+    button.primary { background: #1f6feb; }
+    button.danger { background: #d73a49; }
+    button.ok { background: #238636; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* Фрейм превью */
+    .stream-preview { 
+      width: 100%; 
+      aspect-ratio: 16/9; 
+      border: 0; 
+      border-radius: 12px; 
+      background: #000; 
+    }
+
+    /* Компас */
+    .compass { 
+      display: flex; 
+      align-items: stretch; 
+      gap: 12px; 
+    }
+
     .rose {
-      width: 86px; height: 86px; border-radius: 50%;
+      width: 86px; 
+      height: 86px; 
+      border-radius: 50%;
       border: 2px solid var(--line);
       position: relative;
       background: radial-gradient(circle at center, #1c2130, #11151d);
       flex: 0 0 auto;
       margin-top: 2px;
     }
+
     .needle {
-      position:absolute; left:50%; top:50%;
-      width:4px; height:34px;
-      background: linear-gradient(180deg,#ff4d4d,#fff);
+      position: absolute; 
+      left: 50%; 
+      top: 50%;
+      width: 4px; 
+      height: 34px;
+      background: linear-gradient(180deg, #ff4d4d, #fff);
       transform-origin: center 26px;
       transform: translate(-50%, -100%) rotate(0deg);
-      border-radius:4px;
+      border-radius: 4px;
     }
-    .rose .n, .rose .e, .rose .s, .rose .w {
-      position:absolute; font-size:12px; color:var(--muted); font-weight:700;
-    }
-    .rose .n { left:50%; top:4px; transform:translateX(-50%); color:#ff7b7b; }
-    .rose .s { left:50%; bottom:4px; transform:translateX(-50%); }
-    .rose .e { right:6px; top:50%; transform:translateY(-50%); }
-    .rose .w { left:6px; top:50%; transform:translateY(-50%); }
 
-    .mapWrap{
+    .rose .n, .rose .e, .rose .s, .rose .w {
+      position: absolute; 
+      font-size: 12px; 
+      color: var(--muted); 
+      font-weight: 700;
+    }
+    .rose .n { left: 50%; top: 4px; transform: translateX(-50%); color: #ff7b7b; }
+    .rose .s { left: 50%; bottom: 4px; transform: translateX(-50%); }
+    .rose .e { right: 6px; top: 50%; transform: translateY(-50%); }
+    .rose .w { left: 6px; top: 50%; transform: translateY(-50%); }
+
+    /* Карта */
+    .mapWrap {
       flex: 1 1 auto;
       min-width: 240px;
       height: 170px;
       border-radius: 12px;
       overflow: hidden;
       border: 1px solid var(--line);
-      background:#000;
+      background: #000;
       position: relative;
     }
     
@@ -93,12 +213,13 @@
       filter: invert(90%) hue-rotate(180deg);
     }
 
+    /* Чат */
     .chat-status { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
     
     #chat { 
-      display:flex; 
+      display: flex; 
       flex-direction: column-reverse; 
-      gap:6px; 
+      gap: 6px; 
       max-height: none; 
       overflow: hidden;
     }
@@ -106,7 +227,7 @@
     .message {
       padding: 6px 8px;
       border-radius: 8px;
-      background: rgba(255,255,255,.05);
+      background: rgba(255, 255, 255, .05);
       color: #fff;
       font-size: 16px;
       line-height: 1.3;
@@ -115,17 +236,18 @@
       max-width: 100%;
       word-wrap: break-word;
     }
+
     .message.fade-out { animation: fadeOut 0.4s forwards; }
     .username { font-weight: 700; margin-right: 6px; }
 
-    @keyframes fadeIn { from {opacity:0; transform:translateY(6px)} to {opacity:1; transform:translateY(0)} }
-    @keyframes fadeOut { from {opacity:1; transform:translateY(0)} to {opacity:0; transform:translateY(-6px)} }
+    @keyframes fadeIn { from {opacity: 0; transform: translateY(6px)} to {opacity: 1; transform: translateY(0)} }
+    @keyframes fadeOut { from {opacity: 1; transform: translateY(0)} to {opacity: 0; transform: translateY(-6px)} }
 
     .chat-card { cursor: pointer; transition: all 0.3s ease; }
-    .chat-card:hover { transform: scale(1.01); }
     
-    body.chat-fullscreen .wrap > *:not(.chat-card):not(.sticky-preview):not(.compass-card):not(#twitchSettingsCard) { 
-      display: none; 
+    /* Стили для полноэкранного режима чата */
+    body.chat-fullscreen .wrap > *:not(.chat-card):not(.sticky-preview):not(.compass-card) { 
+      display: none !important; 
     }
     
     body.chat-fullscreen .wrap {
@@ -185,43 +307,15 @@
       padding: 6px;
     }
 
-    body.chat-fullscreen .compass {
-      gap: 6px;
-    }
+    body.chat-fullscreen .compass { gap: 6px; }
+    body.chat-fullscreen .rose { width: 50px; height: 50px; }
+    body.chat-fullscreen .needle { height: 20px; width: 3px; transform-origin: center 15px; }
+    body.chat-fullscreen .mapWrap { height: 80px; min-width: 150px; }
+    body.chat-fullscreen .compass-card .title { font-size: 10px; margin-bottom: 4px; }
+    body.chat-fullscreen .mapInfo { font-size: 9px; margin-top: 3px; }
+    body.chat-fullscreen .rose .n, body.chat-fullscreen .rose .e, body.chat-fullscreen .rose .s, body.chat-fullscreen .rose .w { font-size: 9px; }
 
-    body.chat-fullscreen .rose {
-      width: 50px;
-      height: 50px;
-    }
-
-    body.chat-fullscreen .needle {
-      height: 20px;
-      width: 3px;
-      transform-origin: center 15px;
-    }
-
-    body.chat-fullscreen .mapWrap {
-      height: 80px;
-      min-width: 150px;
-    }
-
-    body.chat-fullscreen .compass-card .title {
-      font-size: 10px;
-      margin-bottom: 4px;
-    }
-
-    body.chat-fullscreen .mapInfo {
-      font-size: 9px;
-      margin-top: 3px;
-    }
-
-    body.chat-fullscreen .rose .n,
-    body.chat-fullscreen .rose .e,
-    body.chat-fullscreen .rose .s,
-    body.chat-fullscreen .rose .w {
-      font-size: 9px;
-    }
-
+    /* Кнопка выхода из полноэкранного режима */
     .exit-fullscreen-btn {
       display: none;
       position: fixed;
@@ -230,21 +324,19 @@
       z-index: 1000;
       background: rgba(217, 58, 73, 0.9);
       backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 50%;
       width: 44px;
       height: 44px;
       padding: 0;
       font-size: 24px;
       line-height: 1;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    
-    body.chat-fullscreen .exit-fullscreen-btn {
-      display: flex;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       align-items: center;
       justify-content: center;
     }
+    
+    body.chat-fullscreen .exit-fullscreen-btn { display: flex; }
 
     .location-badge {
       display: inline-block;
@@ -257,7 +349,7 @@
       color: var(--green);
     }
 
-    /* Twitch Settings Card Inputs */
+    /* Инпуты для настроек Twitch */
     .tw-input {
       flex: 1;
       min-width: 120px;
@@ -274,11 +366,13 @@
   <button class="exit-fullscreen-btn" id="exitFullscreenBtn" title="Выйти из полноэкранного режима">✕</button>
 
   <div class="wrap">
+    <!-- Слой 1: Превью стрима -->
     <div class="card sticky-preview">
       <div class="title">Stream Preview</div>
       <iframe class="stream-preview" id="twitchPreview" allowfullscreen></iframe>
     </div>
 
+    <!-- Слой 2: Основная информация трекера -->
     <div class="card">
       <div class="title">Walkathon Tracker <span class="location-badge">📍 Live GPS</span></div>
       <div class="big" id="done">0m</div>
@@ -286,36 +380,23 @@
 
       <div class="bar"><div class="fill" id="fill"></div></div>
 
-      <div class="meta" style="margin-top:10px">
+      <div class="meta" style="margin-top: 10px">
         <div class="stat"><div class="k">Status</div><div class="v" id="status">auth...</div></div>
         <div class="stat"><div class="k">Accuracy</div><div class="v" id="acc">-</div></div>
         <div class="stat"><div class="k">Speed</div><div class="v" id="speed">-</div></div>
         <div class="stat"><div class="k">Heading</div><div class="v" id="headingText">-</div></div>
       </div>
 
-      <div class="row" style="margin-top:12px">
+      <div class="row" style="margin-top: 12px">
         <button class="primary" id="startBtn" disabled>Start GPS</button>
         <button class="ok" id="stopBtn" disabled>Stop</button>
         <button class="danger" id="resetBtn" disabled>Reset</button>
       </div>
 
-      <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
+      <div class="muted" style="margin-top: 8px" id="authInfo">Auth: ...</div>
     </div>
 
-    <!-- NEW: TWITCH SETTINGS CARD FOR GITHUB SAFETY -->
-    <div class="card" id="twitchSettingsCard">
-      <div class="title">Twitch API Settings (GitHub Safe)</div>
-      <div class="row" style="margin-bottom:8px">
-        <input type="password" id="twClientId" class="tw-input" placeholder="Twitch Client ID">
-        <input type="password" id="twToken" class="tw-input" placeholder="Access Token">
-      </div>
-      <div class="row">
-        <input type="text" id="twBroadcasterId" class="tw-input" placeholder="Broadcaster ID (digits)">
-        <button id="saveTwitchBtn" class="ok">Connect Twitch Events</button>
-      </div>
-      <div id="twStatus" class="muted" style="margin-top:8px; font-size:11px">EventSub: Disconnected</div>
-    </div>
-
+    <!-- Слой 3: Компас и карта -->
     <div class="card compass-card">
       <div class="title">Compass + Map (Google Maps — Live from Firebase)</div>
       <div class="compass">
@@ -324,20 +405,31 @@
           <div class="n">N</div><div class="e">E</div><div class="s">S</div><div class="w">W</div>
         </div>
         <div class="mapWrap">
-          <iframe class="mapFrame" id="mapFrame" 
-                  src="about:blank" 
-                  loading="lazy"
-                  referrerpolicy="no-referrer-when-downgrade">
-          </iframe>
+          <iframe class="mapFrame" id="mapFrame" src="about:blank" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
         </div>
       </div>
-      <div class="muted mapInfo" style="margin-top:8px" id="mapInfo">Map: waiting for GPS...</div>
+      <div class="muted mapInfo" style="margin-top: 8px" id="mapInfo">Map: waiting for GPS...</div>
     </div>
 
+    <!-- Слой 4: Чат -->
     <div class="card chat-card" id="chatCard">
-      <div class="title">Twitch Chat — sergiei2 <span style="opacity:0.6">(нажми для полноэкранного режима)</span></div>
+      <div class="title">Twitch Chat — sergiei2 <span style="opacity: 0.6">(нажми для полноэкранного режима)</span></div>
       <div class="chat-status" id="chatStatus">starting...</div>
       <div id="chat"></div>
+    </div>
+
+    <!-- Слой 5: Настройки Twitch API (только локально) -->
+    <div class="card" id="twitchSettingsCard">
+      <div class="title">Twitch API Settings (GitHub Safe)</div>
+      <div class="row" style="margin-bottom: 8px">
+        <input type="password" id="twClientId" class="tw-input" placeholder="Twitch Client ID">
+        <input type="password" id="twToken" class="tw-input" placeholder="Access Token">
+      </div>
+      <div class="row">
+        <input type="text" id="twBroadcasterId" class="tw-input" placeholder="Broadcaster ID (digits)">
+        <button id="saveTwitchBtn" class="ok">Connect Twitch Follows</button>
+      </div>
+      <div id="twStatus" class="muted" style="margin-top: 8px; font-size: 11px">EventSub: Disconnected</div>
     </div>
   </div>
 
@@ -346,6 +438,9 @@
     import { getDatabase, ref, update, onValue, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+    /**
+     * Конфигурация Firebase.
+     */
     const firebaseConfig = {
       apiKey: "AIzaSyCZbd5_egCnte2hKI7PmKgduHpyw1v7jAo",
       authDomain: "walkathon-a4233.firebaseapp.com",
@@ -356,12 +451,15 @@
       appId: "1:314823180241:web:bbfe6e689c18ec5d922af0"
     };
 
+    // Настройка превью Twitch
     const parent = location.hostname;
-    document.getElementById("twitchPreview").src =
-      `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
+    document.getElementById("twitchPreview").src = `https://player.twitch.tv/?channel=${encodeURIComponent(CHANNEL_NAME)}&parent=${encodeURIComponent(parent)}&muted=true`;
 
     const DEFAULT_GOAL_METERS = 25000;
 
+    /**
+     * Параметры фильтрации GPS.
+     */
     const GPS_CONFIG = {
       MIN_ACCURACY: 30,
       MIN_DISTANCE: 5,
@@ -372,11 +470,13 @@
       SMOOTHING_WINDOW: 5,
     };
 
+    // Инициализация Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
     const stateRef = ref(db, "walkathon/state");
 
+    // Элементы интерфейса
     const doneEl = document.getElementById("done");
     const leftEl = document.getElementById("left");
     const fillEl = document.getElementById("fill");
@@ -385,23 +485,22 @@
     const speedEl = document.getElementById("speed");
     const headingTextEl = document.getElementById("headingText");
     const authInfoEl = document.getElementById("authInfo");
-
     const startBtn = document.getElementById("startBtn");
     const stopBtn  = document.getElementById("stopBtn");
     const resetBtn = document.getElementById("resetBtn");
-
     const mapFrame = document.getElementById("mapFrame");
     const mapInfo  = document.getElementById("mapInfo");
-
     const chatCard = document.getElementById("chatCard");
     const exitFullscreenBtn = document.getElementById("exitFullscreenBtn");
-
+    const chatEl = document.getElementById("chat");
+    const chatStatusEl = document.getElementById("chatStatus");
     const twStatusEl = document.getElementById("twStatus");
     const twClientIdInput = document.getElementById("twClientId");
     const twTokenInput = document.getElementById("twToken");
     const twBroadcasterIdInput = document.getElementById("twBroadcasterId");
     const saveTwitchBtn = document.getElementById("saveTwitchBtn");
 
+    // Обработка перехода в полноэкранный режим
     chatCard.addEventListener("click", () => {
       if (!document.body.classList.contains("chat-fullscreen")) {
         document.body.classList.add("chat-fullscreen");
@@ -412,67 +511,58 @@
       document.body.classList.remove("chat-fullscreen");
     });
 
-    const chatEl = document.getElementById("chat");
-    const chatStatusEl = document.getElementById("chatStatus");
-
-    function setChatStatus(text){ chatStatusEl.textContent = text; }
-
+    /**
+     * Выводит сообщение в локальный чат трекера.
+     */
     function addMessage(username, text, color) {
       const msg = document.createElement("div");
       msg.className = "message";
-
       const nameSpan = document.createElement("span");
       nameSpan.className = "username";
       nameSpan.textContent = username + ":";
       if (color) nameSpan.style.color = color;
       msg.appendChild(nameSpan);
-
       const textSpan = document.createElement("span");
       textSpan.textContent = text;
       msg.appendChild(textSpan);
-
       chatEl.prepend(msg);
-
       const isFullscreen = document.body.classList.contains("chat-fullscreen");
       const maxMessages = isFullscreen ? 100 : MAX_MESSAGES;
-
-      while (chatEl.children.length > maxMessages) {
-        chatEl.lastChild.remove();
-      }
-
+      while (chatEl.children.length > maxMessages) { chatEl.lastChild.remove(); }
       if (!isFullscreen) {
         setTimeout(() => {
           msg.classList.add("fade-out");
-          setTimeout(() => {
-            if (msg.parentNode) msg.remove();
-          }, 400);
+          setTimeout(() => { if (msg.parentNode) msg.remove(); }, 400);
         }, MESSAGE_LIFETIME * 1000);
       }
     }
 
-    // --- NEW TWITCH FOLLOW LOGIC ---
+    /**
+     * Основная логика обработки нового фолловера.
+     * Прибавляет +50 к цели и +1 к общему счетчику.
+     */
     async function handleNewFollow(followerName) {
       console.log(`🎉 New follow detected: ${followerName}`);
-      addMessage("SYSTEM", `${followerName} followed! (+50m)`, "#39ff14");
-
+      addMessage("SYSTEM", `${followerName} зафолловился! (+50m)`, "#39ff14");
       try {
-        // We use increment to safely update the values in Firebase
+        // Атомарное обновление Firebase
         await update(stateRef, {
           goalMeters: increment(50),
           followsCount: increment(1)
         });
       } catch (e) {
-        console.error("Firebase update failed:", e);
+        console.error("Firebase update error:", e);
       }
     }
 
+    // --- ЛОГИКА TWITCH EVENTSUB (WEBSOCKET) ---
     let esWs;
     function connectEventSub() {
-      const clientId = localStorage.getItem('tw_cid');
-      const token = localStorage.getItem('tw_tkn');
-      const broadcasterId = localStorage.getItem('tw_bid');
+      const cid = localStorage.getItem('tw_cid');
+      const tkn = localStorage.getItem('tw_tkn');
+      const bid = localStorage.getItem('tw_bid');
 
-      if (!clientId || !token || !broadcasterId) {
+      if (!cid || !tkn || !bid) {
         twStatusEl.textContent = "EventSub: Setup keys below";
         return;
       }
@@ -480,20 +570,13 @@
       if (esWs) esWs.close();
       esWs = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
 
-      esWs.onopen = () => {
-        twStatusEl.textContent = "EventSub: Connecting...";
-      };
+      esWs.onopen = () => { twStatusEl.textContent = "EventSub: Connecting..."; };
 
       esWs.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
-        // Handling the Session Welcome message
         if (data.metadata.message_type === "session_welcome") {
-          const sessionId = data.payload.session.id;
-          subscribeToFollows(sessionId, clientId, token, broadcasterId);
+          subscribeToFollows(data.payload.session.id, cid, tkn, bid);
         }
-
-        // Handling the notification message
         if (data.metadata.message_type === "notification") {
           const eventData = data.payload.event;
           handleNewFollow(eventData.user_name);
@@ -501,12 +584,8 @@
       };
 
       esWs.onclose = () => {
-        twStatusEl.textContent = "EventSub: Connection lost. Retrying...";
+        twStatusEl.textContent = "EventSub: Reconnecting...";
         setTimeout(connectEventSub, 5000);
-      };
-
-      esWs.onerror = (err) => {
-        console.error("WebSocket Error:", err);
       };
     }
 
@@ -533,49 +612,42 @@
           })
         });
 
-        const result = await response.json();
         if (response.ok) {
           twStatusEl.textContent = "EventSub: Connected ✅";
-          console.log("Successfully subscribed to follow events");
         } else {
-          console.error("Twitch subscription failed:", result);
-          twStatusEl.textContent = "EventSub: Subscription error";
+          twStatusEl.textContent = "EventSub: Sub Error";
         }
       } catch (err) {
-        console.error("Error subscribing:", err);
         twStatusEl.textContent = "EventSub: Error";
       }
     }
 
+    // Сохранение настроек Twitch
     saveTwitchBtn.onclick = () => {
       localStorage.setItem('tw_cid', twClientIdInput.value.trim());
       localStorage.setItem('tw_tkn', twTokenInput.value.trim());
       localStorage.setItem('tw_bid', twBroadcasterIdInput.value.trim());
-      alert("Twitch API settings saved to local storage!");
+      alert("Twitch API settings saved locally!");
       connectEventSub();
     };
 
-    // Fill inputs from local storage
+    // Загрузка настроек из локального хранилища
     twClientIdInput.value = localStorage.getItem('tw_cid') || '';
     twTokenInput.value = localStorage.getItem('tw_tkn') || '';
     twBroadcasterIdInput.value = localStorage.getItem('tw_bid') || '';
 
-    // --- TWITCH CHAT LOGIC ---
+    // --- ЛОГИКА ТВИЧ-ЧАТА (IRC) ---
     let ws;
-
     function connectTwitch() {
-      if (!CHANNEL_NAME) { setChatStatus("channel not set"); return; }
-
+      if (!CHANNEL_NAME) { chatStatusEl.textContent = "channel not set"; return; }
       const nick = "justinfan" + Math.floor(Math.random() * 80000 + 1000);
       ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
-
       ws.addEventListener("open", () => {
-        setChatStatus("connected");
+        chatStatusEl.textContent = "connected";
         ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership\r\n");
         ws.send("NICK " + nick + "\r\n");
         ws.send("JOIN #" + CHANNEL_NAME.toLowerCase() + "\r\n");
       });
-
       ws.addEventListener("message", (event) => {
         const lines = event.data.split("\r\n");
         for (const line of lines) {
@@ -584,62 +656,52 @@
           handleIrcLine(line);
         }
       });
-
       ws.addEventListener("close", () => {
-        setChatStatus("reconnecting in 5s...");
+        chatStatusEl.textContent = "reconnecting in 5s...";
         setTimeout(connectTwitch, 5000);
       });
-
-      ws.addEventListener("error", () => {
-        setChatStatus("socket error");
-        ws.close();
-      });
+      ws.addEventListener("error", () => { chatStatusEl.textContent = "socket error"; ws.close(); });
     }
 
+    /**
+     * Парсер IRC строки для выделения имени, цвета и текста сообщения.
+     */
     function handleIrcLine(line) {
       let tags = {};
       let rest = line;
-
       if (rest.startsWith("@")) {
         const spaceIdx = rest.indexOf(" ");
         const tagStr = rest.slice(1, spaceIdx);
         rest = rest.slice(spaceIdx + 1);
-
         tagStr.split(";").forEach(part => {
           const [k, v] = part.split("=");
           tags[k] = v || "";
         });
       }
-
       if (!rest.startsWith(":")) return;
-
       const prefixEnd = rest.indexOf(" ");
       const prefix = rest.slice(1, prefixEnd);
       rest = rest.slice(prefixEnd + 1);
-
       const spaceIdx = rest.indexOf(" ");
       const command = rest.slice(0, spaceIdx);
       const params = rest.slice(spaceIdx + 1);
-
       if (command === "PRIVMSG") {
         const msgIdx = params.indexOf(" :");
         if (msgIdx === -1) return;
-
         const text = params.slice(msgIdx + 2).slice(0, 350);
         const username = (tags["display-name"] || prefix.split("!")[0]) || "user";
         const color = tags["color"] || "#ffffff";
-
         addMessage(username, text, color);
       }
     }
 
+    // --- ЛОГИКА АВТОРИЗАЦИИ FIREBASE ---
     let authed = false;
     function setBtnsEnabled(v){
       startBtn.disabled = !v;
       stopBtn.disabled  = !v;
       resetBtn.disabled = !v;
     }
-    setBtnsEnabled(false);
 
     async function ensureAuth(){
       if (auth.currentUser) return;
@@ -651,345 +713,185 @@
       setBtnsEnabled(authed);
       authInfoEl.textContent = authed ? "Auth: anonymous OK" : "Auth: ...";
       if (authed && statusEl.textContent === "auth...") statusEl.textContent = "idle";
-      
-      // Start EventSub once authed
       if (authed) connectEventSub();
     });
 
     statusEl.textContent = "auth...";
     authInfoEl.textContent = "Auth: signing in...";
     ensureAuth().catch((e)=>{
-      console.log("Auth error", e);
       authInfoEl.textContent = "Auth: error";
       statusEl.textContent = "auth error";
     });
 
-    // --- GEOLOCATION CORE ---
+    // --- ВЫЧИСЛИТЕЛЬНАЯ ЛОГИКА GPS (МАТЕМАТИКА) ---
+    
+    /**
+     * Формула Винсенти для расчета расстояния между точками на эллипсоиде.
+     */
     function vincentyDistance(lat1, lon1, lat2, lon2) {
-      const a = 6378137.0;
-      const b = 6356752.314245;
-      const f = 1 / 298.257223563;
-
+      const a = 6378137.0, b = 6356752.314245, f = 1 / 298.257223563;
       const toRad = (deg) => deg * Math.PI / 180;
-
-      const φ1 = toRad(lat1);
-      const φ2 = toRad(lat2);
-      const λ1 = toRad(lon1);
-      const λ2 = toRad(lon2);
-
-      const L = λ2 - λ1;
-
-      const U1 = Math.atan((1 - f) * Math.tan(φ1));
-      const U2 = Math.atan((1 - f) * Math.tan(φ2));
-
-      const sinU1 = Math.sin(U1);
-      const cosU1 = Math.cos(U1);
-      const sinU2 = Math.sin(U2);
-      const cosU2 = Math.cos(U2);
-
-      let λ = L;
-      let λPrev;
-      let iterLimit = 100;
-      let cosSqα, sinσ, cos2σM, cosσ, σ;
-
+      const φ1 = toRad(lat1), φ2 = toRad(lat2), λ1 = toRad(lon1), λ2 = toRad(lon2), L = λ2 - λ1;
+      const U1 = Math.atan((1 - f) * Math.tan(φ1)), U2 = Math.atan((1 - f) * Math.tan(φ2));
+      const sinU1 = Math.sin(U1), cosU1 = Math.cos(U1), sinU2 = Math.sin(U2), cosU2 = Math.cos(U2);
+      let λ = L, λPrev, iterLimit = 100, cosSqα, sinσ, cos2σM, cosσ, σ;
       do {
-        const sinλ = Math.sin(λ);
-        const cosλ = Math.cos(λ);
-
-        const sinSqσ = (cosU2 * sinλ) ** 2 + 
-                       (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) ** 2;
-        
-        sinσ = Math.sqrt(sinSqσ);
-        
-        if (sinσ === 0) return 0;
-
-        cosσ = sinU1 * sinU2 + cosU1 * cosU2 * cosλ;
-        σ = Math.atan2(sinσ, cosσ);
-
-        const sinα = cosU1 * cosU2 * sinλ / sinσ;
-        cosSqα = 1 - sinα ** 2;
-
+        const sinλ = Math.sin(λ), cosλ = Math.cos(λ);
+        const sinSqσ = (cosU2 * sinλ) ** 2 + (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) ** 2;
+        sinσ = Math.sqrt(sinSqσ); if (sinσ === 0) return 0;
+        cosσ = sinU1 * sinU2 + cosU1 * cosU2 * cosλ; σ = Math.atan2(sinσ, cosσ);
+        const sinα = cosU1 * cosU2 * sinλ / sinσ; cosSqα = 1 - sinα ** 2;
         cos2σM = cosσ - 2 * sinU1 * sinU2 / cosSqα;
-        
         if (isNaN(cos2σM)) cos2σM = 0;
-
         const C = f / 16 * cosSqα * (4 + f * (4 - 3 * cosSqα));
-
-        λPrev = λ;
-        λ = L + (1 - C) * f * sinα * 
-            (σ + C * sinσ * (cos2σM + C * cosσ * (-1 + 2 * cos2σM ** 2)));
-
+        λPrev = λ; λ = L + (1 - C) * f * sinα * (σ + C * sinσ * (cos2σM + C * cosσ * (-1 + 2 * cos2σM ** 2)));
       } while (Math.abs(λ - λPrev) > 1e-12 && --iterLimit > 0);
-
-      if (iterLimit === 0) {
-        return haversineDistance(lat1, lon1, lat2, lon2);
-      }
-
+      if (iterLimit === 0) return haversineDistance(lat1, lon1, lat2, lon2);
       const uSq = cosSqα * (a ** 2 - b ** 2) / (b ** 2);
       const A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
       const B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
-
-      const Δσ = B * sinσ * (cos2σM + B / 4 * 
-                (cosσ * (-1 + 2 * cos2σM ** 2) - 
-                B / 6 * cos2σM * (-3 + 4 * sinσ ** 2) * (-3 + 4 * cos2σM ** 2)));
-
-      const s = b * A * (σ - Δσ);
-
-      return s;
+      const Δσ = B * sinσ * (cos2σM + B / 4 * (cosσ * (-1 + 2 * cos2σM ** 2) - B / 6 * cos2σM * (-3 + 4 * sinσ ** 2) * (-3 + 4 * cos2σM ** 2)));
+      return b * A * (σ - Δσ);
     }
 
+    /**
+     * Запасной расчет расстояния по формуле гаверсинуса.
+     */
     function haversineDistance(lat1, lon1, lat2, lon2) {
       const R = 6371008.8;
       const toRad = (deg) => deg * Math.PI / 180;
-      
-      const φ1 = toRad(lat1);
-      const φ2 = toRad(lat2);
-      const Δφ = toRad(lat2 - lat1);
-      const Δλ = toRad(lon2 - lon1);
-      
-      const a = Math.sin(Δφ / 2) ** 2 +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ / 2) ** 2;
-      
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      
-      return R * c;
+      const Δφ = toRad(lat2 - lat1), Δλ = toRad(lon2 - lon1);
+      const a = Math.sin(Δφ / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(Δλ / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
+    /**
+     * Класс для сглаживания координат (устранение дрожания GPS).
+     */
     class CoordinateSmoothing {
       constructor(windowSize = GPS_CONFIG.SMOOTHING_WINDOW) {
-        this.buffer = [];
-        this.windowSize = windowSize;
+        this.buffer = []; this.windowSize = windowSize;
       }
-
       add(lat, lon, accuracy) {
         this.buffer.push({ lat, lon, accuracy, weight: 1 / (accuracy || 1) });
-        if (this.buffer.length > this.windowSize) {
-          this.buffer.shift();
-        }
+        if (this.buffer.length > this.windowSize) this.buffer.shift();
       }
-
       getSmoothed() {
         if (this.buffer.length === 0) return null;
-        
-        let totalWeight = 0;
-        let sumLat = 0;
-        let sumLon = 0;
-
-        for (const p of this.buffer) {
-          sumLat += p.lat * p.weight;
-          sumLon += p.lon * p.weight;
-          totalWeight += p.weight;
-        }
-
-        return {
-          lat: sumLat / totalWeight,
-          lon: sumLon / totalWeight
-        };
+        let totalWeight = 0, sumLat = 0, sumLon = 0;
+        for (const p of this.buffer) { sumLat += p.lat * p.weight; sumLon += p.lon * p.weight; totalWeight += p.weight; }
+        return { lat: sumLat / totalWeight, lon: sumLon / totalWeight };
       }
-
-      reset() {
-        this.buffer = [];
-      }
+      reset() { this.buffer = []; }
     }
 
     function fmtMeters(m){ return Math.round(Number(m || 0)) + "m"; }
 
-    let watchId = null;
-    let distanceMeters = 0;
-    let goalMeters = DEFAULT_GOAL_METERS;
-    let lastUpdateTime = 0;
-    let lastValidPoint = null;
-    let lastSaveTime = 0;
-    
+    let watchId = null, distanceMeters = 0, goalMeters = DEFAULT_GOAL_METERS;
+    let lastUpdateTime = 0, lastValidPoint = null, lastSaveTime = 0;
     const smoother = new CoordinateSmoothing();
 
+    /**
+     * Обновляет текстовые поля и полосу прогресса в интерфейсе.
+     */
     function updateUI(extra = {}) {
       const left = Math.max(goalMeters - distanceMeters, 0);
       const percent = goalMeters > 0 ? Math.min((distanceMeters / goalMeters) * 100, 100) : 0;
-
       doneEl.textContent = fmtMeters(distanceMeters);
       leftEl.textContent = "LEFT: " + fmtMeters(left);
       fillEl.style.width = percent + "%";
-
       if (extra.status) statusEl.textContent = extra.status;
       if (extra.acc != null) accEl.textContent = Math.round(extra.acc) + "m";
       if (extra.speed != null) speedEl.textContent = (extra.speed * 3.6).toFixed(1) + " km/h";
     }
 
+    /**
+     * Отправляет текущее состояние трекера в базу данных Firebase.
+     */
     async function pushState(status, extra = {}) {
       if (!authed) await ensureAuth();
-      await update(stateRef, {
-        distanceMeters: Math.round(distanceMeters),
-        status,
-        updatedAt: Date.now(),
-        ...extra
-      });
+      await update(stateRef, { distanceMeters: Math.round(distanceMeters), status, updatedAt: Date.now(), ...extra });
     }
 
     let lastMapKey = "";
-
-    function setMapBlank(){
-      mapFrame.src = "about:blank";
-      mapInfo.textContent = "Map: idle";
-      lastMapKey = "";
-    }
-
+    function setMapBlank(){ mapFrame.src = "about:blank"; mapInfo.textContent = "Map: idle"; lastMapKey = ""; }
+    
+    /**
+     * Обновляет IFrame карты Google.
+     */
     function setMap(lat, lon){
       const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
-      if (key === lastMapKey) return;
-      lastMapKey = key;
-
-      const zoom = 17;
-      const maptype = "roadmap";
-      
-      const src = `https://maps.google.com/maps?q=${lat},${lon}&t=${maptype}&z=${zoom}&output=embed`;
-      
-      mapFrame.src = src;
+      if (key === lastMapKey) return; lastMapKey = key;
+      mapFrame.src = `https://maps.google.com/maps?q=${lat},${lon}&t=roadmap&z=17&output=embed`;
       mapInfo.textContent = `📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
+    /**
+     * Запускает отслеживание геолокации.
+     */
     async function startGPS() {
       if (!authed) await ensureAuth();
-      if (!navigator.geolocation) return alert("Geolocation не поддерживается");
+      if (!navigator.geolocation) return alert("Geolocation not supported");
       if (watchId != null) return;
-
-      statusEl.textContent = "starting";
-      lastValidPoint = null;
-      lastSaveTime = 0;
-      smoother.reset();
-
-      const options = {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      };
-
+      statusEl.textContent = "starting"; lastValidPoint = null; lastSaveTime = 0; smoother.reset();
       watchId = navigator.geolocation.watchPosition(
         async (position) => {
           const { latitude, longitude, accuracy, speed } = position.coords;
-          const timestamp = position.timestamp;
-          const now = Date.now();
-
-          await pushState("tracking", { 
-            accuracy, 
-            latitude, 
-            longitude, 
-            speed: speed ?? 0 
-          });
-
+          await pushState("tracking", { accuracy, latitude, longitude, speed: speed ?? 0 });
           setMap(latitude, longitude);
-
-          if (!accuracy || accuracy > GPS_CONFIG.MIN_ACCURACY) {
-            updateUI({ status: "weak signal", acc: accuracy, speed: 0 });
-            return;
-          }
-
+          if (!accuracy || accuracy > GPS_CONFIG.MIN_ACCURACY) { updateUI({ status: "weak signal", acc: accuracy, speed: 0 }); return; }
           smoother.add(latitude, longitude, accuracy);
-          const smoothed = smoother.getSmoothed();
-
-          if (!smoothed) {
-            updateUI({ status: "calibrating", acc: accuracy, speed: 0 });
-            return;
-          }
-
+          const smoothed = smoother.getSmoothed(); if (!smoothed) { updateUI({ status: "calibrating", acc: accuracy, speed: 0 }); return; }
           if (!lastValidPoint) {
-            lastValidPoint = { 
-              lat: smoothed.lat, 
-              lon: smoothed.lon, 
-              time: timestamp, 
-              accuracy 
-            };
-            lastSaveTime = now;
-            updateUI({ status: "tracking", acc: accuracy, speed: 0 });
-            return;
+            lastValidPoint = { lat: smoothed.lat, lon: smoothed.lon, time: position.timestamp, accuracy };
+            lastSaveTime = Date.now(); updateUI({ status: "tracking", acc: accuracy, speed: 0 }); return;
           }
-
-          const timeSinceLastSave = now - lastSaveTime;
-          if (timeSinceLastSave < GPS_CONFIG.MIN_TIME_BETWEEN) {
-            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
-            return;
-          }
-
-          const distance = vincentyDistance(
-            lastValidPoint.lat, lastValidPoint.lon,
-            smoothed.lat, smoothed.lon
-          );
-
-          const timeDiff = (timestamp - lastValidPoint.time) / 1000;
+          const now = Date.now();
+          if (now - lastSaveTime < GPS_CONFIG.MIN_TIME_BETWEEN) { updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 }); return; }
+          const distance = vincentyDistance(lastValidPoint.lat, lastValidPoint.lon, smoothed.lat, smoothed.lon);
+          const timeDiff = (position.timestamp - lastValidPoint.time) / 1000;
           const calculatedSpeed = timeDiff > 0 ? distance / timeDiff : 0;
-
-          if (distance < GPS_CONFIG.JITTER_THRESHOLD || 
-              distance < GPS_CONFIG.MIN_DISTANCE || 
-              distance > GPS_CONFIG.MAX_DISTANCE || 
-              calculatedSpeed > GPS_CONFIG.MAX_SPEED) {
-            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
-            return;
+          if (distance < GPS_CONFIG.JITTER_THRESHOLD || distance < GPS_CONFIG.MIN_DISTANCE || distance > GPS_CONFIG.MAX_DISTANCE || calculatedSpeed > GPS_CONFIG.MAX_SPEED) {
+            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 }); return;
           }
-
-          distanceMeters += distance;
-          lastValidPoint = { 
-            lat: smoothed.lat, 
-            lon: smoothed.lon, 
-            time: timestamp, 
-            accuracy 
-          };
-          lastSaveTime = now;
-
-          updateUI({ status: "tracking", acc: accuracy, speed: speed || calculatedSpeed });
-
-          if (now - lastUpdateTime > 2000) {
-            await pushState("tracking", { accuracy, latitude, longitude, speed: speed ?? 0 });
-            lastUpdateTime = now;
-          }
+          distanceMeters += distance; lastValidPoint = { lat: smoothed.lat, lon: smoothed.lon, time: position.timestamp, accuracy };
+          lastSaveTime = now; updateUI({ status: "tracking", acc: accuracy, speed: speed || calculatedSpeed });
+          if (now - lastUpdateTime > 2000) { await pushState("tracking", { accuracy, latitude, longitude, speed: speed ?? 0 }); lastUpdateTime = now; }
         },
-        
-        async (error) => {
-          statusEl.textContent = "gps error";
-          await pushState("gps error", { error: error.message });
-        },
-        
-        options
+        async (error) => { statusEl.textContent = "gps error"; await pushState("gps error", { error: error.message }); },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     }
 
+    /**
+     * Останавливает отслеживание.
+     */
     async function stopGPS() {
-      if (watchId != null) { 
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null; 
-      }
-      smoother.reset();
-      setMapBlank();
-      await pushState("stopped");
-      statusEl.textContent = "stopped";
+      if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+      smoother.reset(); setMapBlank();
+      await pushState("stopped"); statusEl.textContent = "stopped";
     }
 
+    /**
+     * Сбрасывает накопленную дистанцию.
+     */
     async function resetGPS() {
       if (!confirm("Сбросить дистанцию?")) return;
-      distanceMeters = 0;
-      lastValidPoint = null;
-      lastSaveTime = 0;
-      smoother.reset();
+      distanceMeters = 0; lastValidPoint = null; lastSaveTime = 0; smoother.reset();
       updateUI({ status: "reset", acc: null, speed: 0 });
       setMapBlank();
-      await update(stateRef, {
-        distanceMeters: 0, status: "reset", updatedAt: Date.now(),
-        latitude: null, longitude: null, accuracy: null, speed: null
-      });
+      await update(stateRef, { distanceMeters: 0, status: "reset", updatedAt: Date.now(), latitude: null, longitude: null, accuracy: null, speed: null });
     }
 
     startBtn.onclick = startGPS;
     stopBtn.onclick  = stopGPS;
     resetBtn.onclick = resetGPS;
 
+    // --- ЛОГИКА КОМПАСА ---
     const needleEl = document.getElementById("needle");
-    function degToDir(deg) {
-      const dirs = ["N","NE","E","SE","S","SW","W","NW"];
-      return dirs[Math.round(deg / 45) % 8];
-    }
+    function degToDir(deg) { const dirs = ["N","NE","E","SE","S","SW","W","NW"]; return dirs[Math.round(deg / 45) % 8]; }
     let smoothHeading = 0, hasHeading = false;
     function angleDelta(a, b) { return (b - a + 540) % 360 - 180; }
-
     function setHeading(deg) {
       const target = ((deg % 360) + 360) % 360;
       if (!hasHeading) { smoothHeading = target; hasHeading = true; }
@@ -1000,26 +902,21 @@
 
     async function initCompass() {
       try {
-        if (typeof DeviceOrientationEvent !== "undefined" &&
-            typeof DeviceOrientationEvent.requestPermission === "function") {
-          const res = await DeviceOrientationEvent.requestPermission();
-          if (res !== "granted") return;
+        if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+          const res = await DeviceOrientationEvent.requestPermission(); if (res !== "granted") return;
         }
         window.addEventListener("deviceorientationabsolute", (e) => { if (typeof e.alpha === "number") setHeading(e.alpha); }, true);
         window.addEventListener("deviceorientation", (e) => { if (typeof e.alpha === "number") setHeading(e.alpha); }, true);
       } catch {}
     }
 
+    // Обработчик обновлений из Firebase
     onValue(stateRef, (snap) => {
       const s = snap.val() || {};
       goalMeters = (typeof s.goalMeters === "number") ? Number(s.goalMeters || DEFAULT_GOAL_METERS) : DEFAULT_GOAL_METERS;
       if (typeof s.distanceMeters === "number") distanceMeters = Number(s.distanceMeters || 0);
-
       updateUI({ status: s.status || "idle", acc: s.accuracy ?? null, speed: s.speed ?? 0 });
-
-      if (typeof s.latitude === "number" && typeof s.longitude === "number") {
-        setMap(s.latitude, s.longitude);
-      }
+      if (typeof s.latitude === "number" && typeof s.longitude === "number") setMap(s.latitude, s.longitude);
     });
 
     initCompass();
