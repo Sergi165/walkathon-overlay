@@ -388,7 +388,8 @@
 
     function buildYouTubeSrc(ytId) {
       const id = encodeURIComponent(ytId || "");
-      return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${id}`;
+      // mute=1 и autoplay=1 обязательны. enablejsapi=1 помогает некоторым браузерам.
+      return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${id}&enablejsapi=1`;
     }
 
     function makeElForItem(it) {
@@ -397,7 +398,8 @@
       
       if (it.type === "yt") {
         const f = document.createElement("iframe");
-        f.allow = "autoplay; encrypted-media";
+        // Разрешаем автоплей на уровне фрейма
+        f.allow = "autoplay; encrypted-media; fullscreen";
         f.frameBorder = "0";
         container.appendChild(f);
       } else {
