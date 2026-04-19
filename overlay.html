@@ -355,9 +355,9 @@
 
       const lapGoal = Number(s.lapGoalMeters || 50);
       const lap = lapGoal > 0 ? (distance % lapGoal) : 0;
-      const lapPct = lapGoal > 0 ? Math.min((lap / lapGoal) * 100, 100) : 0;
+      const lapPct = goal > 0 ? Math.min((lap / lapGoal) * 100, 100) : 0;
 
-      // Здесь берем followsCount
+      // Берем данные из поля followsCount для отображения
       const follows = Number(s.followsCount || 0);
 
       leftBigEl.textContent = `LEFT: ${Math.round(left)}m`;
@@ -389,8 +389,8 @@
 
     function buildYouTubeSrc(ytId) {
       const id = encodeURIComponent(ytId || "");
-      // Фикс автоплея: mute=1 и enablejsapi=1
-      return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${id}&enablejsapi=1&origin=${location.origin}`;
+      // FIX: Добавили mute=1 для гарантированного автоплея
+      return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${id}&enablejsapi=1`;
     }
 
     function makeElForItem(it) {
@@ -399,6 +399,7 @@
       
       if (it.type === "yt") {
         const f = document.createElement("iframe");
+        // FIX: Добавили allow="autoplay"
         f.allow = "autoplay; encrypted-media; fullscreen";
         f.frameBorder = "0";
         container.appendChild(f);
