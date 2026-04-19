@@ -175,6 +175,7 @@
     <div id="viewport">
       <div id="scene">
         <iframe id="bgFrame"></iframe>
+        <!-- FIX: Добавили allow="autoplay" -->
         <iframe id="twitchPreviewFrame" allow="autoplay; fullscreen"></iframe>
         <div id="stage"></div>
       </div>
@@ -359,8 +360,8 @@
     }
     function ytSrc(id){
       const vid = encodeURIComponent(id||"");
-      // Фикс: mute=1 и enablejsapi=1
-      return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${vid}&enablejsapi=1&origin=${location.origin}`;
+      // FIX: Добавили mute=1 и enablejsapi=1
+      return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&controls=0&playsinline=1&loop=1&playlist=${vid}&enablejsapi=1`;
     }
 
     async function addItem(kind, url, layer){
@@ -400,6 +401,7 @@
         box.draggable = false;
 
         const f = document.createElement("iframe");
+        // FIX: Добавили allow="autoplay"
         f.allow = "autoplay; encrypted-media; fullscreen";
         f.frameBorder = "0";
         f.style.pointerEvents = "none";
