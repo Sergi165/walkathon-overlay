@@ -124,7 +124,7 @@
     .chat-card { cursor: pointer; transition: all 0.3s ease; }
     .chat-card:hover { transform: scale(1.01); }
     
-    body.chat-fullscreen .wrap > *:not(.chat-card):not(.sticky-preview):not(.compass-card) { 
+    body.chat-fullscreen .wrap > *:not(.chat-card):not(.sticky-preview):not(.compass-card):not(#twitchSettingsCard) { 
       display: none; 
     }
     
@@ -256,6 +256,18 @@
       margin-top: 4px;
       color: var(--green);
     }
+
+    /* Twitch Settings Card Inputs */
+    .tw-input {
+      flex: 1;
+      min-width: 120px;
+      background: #252a35;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      color: white;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -290,6 +302,20 @@
       <div class="muted" style="margin-top:8px" id="authInfo">Auth: ...</div>
     </div>
 
+    <!-- NEW: TWITCH SETTINGS CARD FOR GITHUB SAFETY -->
+    <div class="card" id="twitchSettingsCard">
+      <div class="title">Twitch API Settings (GitHub Safe)</div>
+      <div class="row" style="margin-bottom:8px">
+        <input type="password" id="twClientId" class="tw-input" placeholder="Twitch Client ID">
+        <input type="password" id="twToken" class="tw-input" placeholder="Access Token">
+      </div>
+      <div class="row">
+        <input type="text" id="twBroadcasterId" class="tw-input" placeholder="Broadcaster ID (digits)">
+        <button id="saveTwitchBtn" class="ok">Connect Twitch Events</button>
+      </div>
+      <div id="twStatus" class="muted" style="margin-top:8px; font-size:11px">EventSub: Disconnected</div>
+    </div>
+
     <div class="card compass-card">
       <div class="title">Compass + Map (Google Maps — Live from Firebase)</div>
       <div class="compass">
@@ -317,7 +343,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, update, onValue, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
     const firebaseConfig = {
@@ -370,6 +396,12 @@
     const chatCard = document.getElementById("chatCard");
     const exitFullscreenBtn = document.getElementById("exitFullscreenBtn");
 
+    const twStatusEl = document.getElementById("twStatus");
+    const twClientIdInput = document.getElementById("twClientId");
+    const twTokenInput = document.getElementById("twToken");
+    const twBroadcasterIdInput = document.getElementById("twBroadcasterId");
+    const saveTwitchBtn = document.getElementById("saveTwitchBtn");
+
     chatCard.addEventListener("click", () => {
       if (!document.body.classList.contains("chat-fullscreen")) {
         document.body.classList.add("chat-fullscreen");
@@ -418,6 +450,117 @@
       }
     }
 
+    // --- NEW TWITCH FOLLOW LOGIC ---
+    async function handleNewFollow(followerName) {
+      console.log(`🎉 New follow detected: ${followerName}`);
+      addMessage("SYSTEM", `${followerName} followed! (+50m)`, "#39ff14");
+
+      try {
+        // We use increment to safely update the values in Firebase
+        await update(stateRef, {
+          goalMeters: increment(50),
+          followsCount: increment(1)
+        });
+      } catch (e) {
+        console.error("Firebase update failed:", e);
+      }
+    }
+
+    let esWs;
+    function connectEventSub() {
+      const clientId = localStorage.getItem('tw_cid');
+      const token = localStorage.getItem('tw_tkn');
+      const broadcasterId = localStorage.getItem('tw_bid');
+
+      if (!clientId || !token || !broadcasterId) {
+        twStatusEl.textContent = "EventSub: Setup keys below";
+        return;
+      }
+
+      if (esWs) esWs.close();
+      esWs = new WebSocket('wss://eventsub.wss.twitch.tv/ws');
+
+      esWs.onopen = () => {
+        twStatusEl.textContent = "EventSub: Connecting...";
+      };
+
+      esWs.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        // Handling the Session Welcome message
+        if (data.metadata.message_type === "session_welcome") {
+          const sessionId = data.payload.session.id;
+          subscribeToFollows(sessionId, clientId, token, broadcasterId);
+        }
+
+        // Handling the notification message
+        if (data.metadata.message_type === "notification") {
+          const eventData = data.payload.event;
+          handleNewFollow(eventData.user_name);
+        }
+      };
+
+      esWs.onclose = () => {
+        twStatusEl.textContent = "EventSub: Connection lost. Retrying...";
+        setTimeout(connectEventSub, 5000);
+      };
+
+      esWs.onerror = (err) => {
+        console.error("WebSocket Error:", err);
+      };
+    }
+
+    async function subscribeToFollows(sessionId, clientId, token, broadcasterId) {
+      try {
+        const response = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+          method: 'POST',
+          headers: {
+            'Client-ID': clientId,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            type: "channel.follow",
+            version: "2",
+            condition: { 
+              broadcaster_user_id: broadcasterId,
+              moderator_user_id: broadcasterId 
+            },
+            transport: {
+              method: "websocket",
+              session_id: sessionId
+            }
+          })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+          twStatusEl.textContent = "EventSub: Connected ✅";
+          console.log("Successfully subscribed to follow events");
+        } else {
+          console.error("Twitch subscription failed:", result);
+          twStatusEl.textContent = "EventSub: Subscription error";
+        }
+      } catch (err) {
+        console.error("Error subscribing:", err);
+        twStatusEl.textContent = "EventSub: Error";
+      }
+    }
+
+    saveTwitchBtn.onclick = () => {
+      localStorage.setItem('tw_cid', twClientIdInput.value.trim());
+      localStorage.setItem('tw_tkn', twTokenInput.value.trim());
+      localStorage.setItem('tw_bid', twBroadcasterIdInput.value.trim());
+      alert("Twitch API settings saved to local storage!");
+      connectEventSub();
+    };
+
+    // Fill inputs from local storage
+    twClientIdInput.value = localStorage.getItem('tw_cid') || '';
+    twTokenInput.value = localStorage.getItem('tw_tkn') || '';
+    twBroadcasterIdInput.value = localStorage.getItem('tw_bid') || '';
+
+    // --- TWITCH CHAT LOGIC ---
     let ws;
 
     function connectTwitch() {
@@ -508,6 +651,9 @@
       setBtnsEnabled(authed);
       authInfoEl.textContent = authed ? "Auth: anonymous OK" : "Auth: ...";
       if (authed && statusEl.textContent === "auth...") statusEl.textContent = "idle";
+      
+      // Start EventSub once authed
+      if (authed) connectEventSub();
     });
 
     statusEl.textContent = "auth...";
@@ -518,6 +664,7 @@
       statusEl.textContent = "auth error";
     });
 
+    // --- GEOLOCATION CORE ---
     function vincentyDistance(lat1, lon1, lat2, lon2) {
       const a = 6378137.0;
       const b = 6356752.314245;
@@ -700,8 +847,6 @@
       
       mapFrame.src = src;
       mapInfo.textContent = `📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-      
-      console.log(`🗺️ Map updated: ${lat}, ${lon}`);
     }
 
     async function startGPS() {
@@ -709,7 +854,6 @@
       if (!navigator.geolocation) return alert("Geolocation не поддерживается");
       if (watchId != null) return;
 
-      console.log("🚀 GPS started");
       statusEl.textContent = "starting";
       lastValidPoint = null;
       lastSaveTime = 0;
@@ -727,7 +871,6 @@
           const timestamp = position.timestamp;
           const now = Date.now();
 
-          // 🔥 ОТПРАВЛЯЕМ КООРДИНАТЫ СРАЗУ (даже без движения)
           await pushState("tracking", { 
             accuracy, 
             latitude, 
@@ -738,7 +881,6 @@
           setMap(latitude, longitude);
 
           if (!accuracy || accuracy > GPS_CONFIG.MIN_ACCURACY) {
-            console.log(`❌ Poor accuracy: ${accuracy?.toFixed(1)}m`);
             updateUI({ status: "weak signal", acc: accuracy, speed: 0 });
             return;
           }
@@ -747,7 +889,6 @@
           const smoothed = smoother.getSmoothed();
 
           if (!smoothed) {
-            console.log("⏳ Collecting points...");
             updateUI({ status: "calibrating", acc: accuracy, speed: 0 });
             return;
           }
@@ -760,7 +901,6 @@
               accuracy 
             };
             lastSaveTime = now;
-            console.log("🎯 Base point set");
             updateUI({ status: "tracking", acc: accuracy, speed: 0 });
             return;
           }
@@ -779,28 +919,10 @@
           const timeDiff = (timestamp - lastValidPoint.time) / 1000;
           const calculatedSpeed = timeDiff > 0 ? distance / timeDiff : 0;
 
-          console.log(`📏 ${distance.toFixed(2)}m, ${(calculatedSpeed*3.6).toFixed(1)}km/h`);
-
-          if (distance < GPS_CONFIG.JITTER_THRESHOLD) {
-            console.log(`🔇 Jitter: ${distance.toFixed(2)}m`);
-            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
-            return;
-          }
-
-          if (distance < GPS_CONFIG.MIN_DISTANCE) {
-            console.log(`⏸️ Too short: ${distance.toFixed(2)}m`);
-            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
-            return;
-          }
-
-          if (distance > GPS_CONFIG.MAX_DISTANCE) {
-            console.log(`❌ Jump: ${distance.toFixed(1)}m`);
-            updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
-            return;
-          }
-
-          if (calculatedSpeed > GPS_CONFIG.MAX_SPEED) {
-            console.log(`❌ Too fast: ${(calculatedSpeed * 3.6).toFixed(1)}km/h`);
+          if (distance < GPS_CONFIG.JITTER_THRESHOLD || 
+              distance < GPS_CONFIG.MIN_DISTANCE || 
+              distance > GPS_CONFIG.MAX_DISTANCE || 
+              calculatedSpeed > GPS_CONFIG.MAX_SPEED) {
             updateUI({ status: "tracking", acc: accuracy, speed: speed || 0 });
             return;
           }
@@ -814,8 +936,6 @@
           };
           lastSaveTime = now;
 
-          console.log(`✅ +${distance.toFixed(2)}m → ${distanceMeters.toFixed(1)}m`);
-
           updateUI({ status: "tracking", acc: accuracy, speed: speed || calculatedSpeed });
 
           if (now - lastUpdateTime > 2000) {
@@ -825,7 +945,6 @@
         },
         
         async (error) => {
-          console.error("GPS error:", error);
           statusEl.textContent = "gps error";
           await pushState("gps error", { error: error.message });
         },
@@ -838,7 +957,6 @@
       if (watchId != null) { 
         navigator.geolocation.clearWatch(watchId);
         watchId = null; 
-        console.log("🛑 GPS stopped");
       }
       smoother.reset();
       setMapBlank();
@@ -907,7 +1025,6 @@
     initCompass();
     updateUI({ status: "idle" });
     connectTwitch();
-    console.log("🗺️ Tracker v2.0 | Instant GPS sync");
   </script>
 </body>
 </html>
