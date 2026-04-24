@@ -210,7 +210,8 @@
       height: 100%;
       border: 0;
       display: block;
-      filter: invert(90%) hue-rotate(180deg);
+      /* ИНВЕРСИЯ УДАЛЕНА ДЛЯ SATELLITE VIEW */
+      filter: none;
     }
 
     /* Чат */
@@ -398,7 +399,7 @@
 
     <!-- Слой 3: Компас и карта -->
     <div class="card compass-card">
-      <div class="title">Compass + Map (Google Maps — Live from Firebase)</div>
+      <div class="title">Compass + Map (Satellite View)</div>
       <div class="compass">
         <div class="rose">
           <div class="needle" id="needle"></div>
@@ -822,7 +823,8 @@
     function setMap(lat, lon){
       const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
       if (key === lastMapKey) return; lastMapKey = key;
-      mapFrame.src = `https://maps.google.com/maps?q=${lat},${lon}&t=roadmap&z=17&output=embed`;
+      // t=k включает спутниковый вид. 
+      mapFrame.src = `https://maps.google.com/maps?q=${lat},${lon}&t=k&z=17&output=embed`;
       mapInfo.textContent = `📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     }
 
